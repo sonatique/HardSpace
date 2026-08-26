@@ -16,6 +16,11 @@
 	Where the published binaries go, and what the package points at. This path is baked into the
 	installed package, so moving it afterwards means re-installing.
 
+	It defaults to a machine-wide location, which requires an elevated prompt: Explorer loads the
+	extension DLL from here into every user's session, so the folder must not be one a standard user
+	can write to. The script creates it with an ACL that says so. A path inside the user profile is
+	accepted without elevation, for development.
+
 .PARAMETER CertificateThumbprint
 	Thumbprint of an existing code-signing certificate in Cert:\CurrentUser\My.
 
@@ -32,7 +37,7 @@
 
 [CmdletBinding()]
 param(
-	[string] $InstallDirectory = 'C:\Tools\HardSpace',
+	[string] $InstallDirectory = 'C:\ProgramData\HardSpace',
 	[string] $CertificateThumbprint,
 	[switch] $CreateSelfSignedCertificate,
 	[switch] $SkipSigning,
@@ -48,6 +53,56 @@ $outputDirectory = Join-Path $packageRoot 'out'
 $stagingDirectory = Join-Path $packageRoot 'obj\staging'
 $msixPath = Join-Path $outputDirectory 'HardSpace.msix'
 
+function Test-Elevated {
+	$identity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+	return $identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+<#
+.SYNOPSIS
+	Creates the install directory with an ACL fit for something Explorer loads.
+.DESCRIPTION
+	C:\ProgramData grants BUILTIN\Users a Write ACE that its subfolders inherit, so a folder created
+	there is writable by any standard user by default. The DLL in this folder is loaded into every
+	user's Explorer, which would make that a straightforward way for one user to run code in
+	another's session. Inheritance is therefore broken and the rights restated: full control for
+	SYSTEM and administrators, read and execute for everyone else.
+#>
+function Initialize-InstallDirectory([string] $path, [bool] $harden) {
+	New-Item -ItemType Directory -Force $path | Out-Null
+	if (-not $harden) {
+		# A folder inside the user's own profile is already closed to other standard users, and
+		# hardening it here would take write access away from the very account doing the publish.
+		return
+	}
+
+	# Well-known SIDs rather than names, which are localised.
+	$system = [Security.Principal.SecurityIdentifier]'S-1-5-18'
+	$administrators = [Security.Principal.SecurityIdentifier]'S-1-5-32-544'
+	$users = [Security.Principal.SecurityIdentifier]'S-1-5-32-545'
+	$inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+	$none = [Security.AccessControl.PropagationFlags]::None
+	$allow = [Security.AccessControl.AccessControlType]::Allow
+
+	# A fresh descriptor rather than one read back with Get-Acl, applied through the directory itself
+	# rather than Set-Acl: both of those try to write every section of the descriptor, including the
+	# audit section, and fail with "does not possess the 'SeSecurityPrivilege' privilege". This writes
+	# only the sections actually modified here, which is the DACL.
+	$security = New-Object Security.AccessControl.DirectorySecurity
+	$security.SetAccessRuleProtection($true, $false)   # break inheritance, keep nothing inherited
+	foreach ($grant in @(, @($system, 'FullControl')) + @(, @($administrators, 'FullControl')) + @(, @($users, 'ReadAndExecute'))) {
+		$security.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+			$grant[0], $grant[1], $inherit, $none, $allow)))
+	}
+
+	try {
+		(Get-Item $path).SetAccessControl($security)
+	}
+	catch {
+		Write-Warning "Could not set the ACL on $path ($($_.Exception.Message)). Check that a standard user cannot write there."
+	}
+}
+
 function Find-SdkTool([string] $name) {
 	$candidates = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\$name" -ErrorAction SilentlyContinue |
 		Sort-Object { [version]($_.Directory.Parent.Name) }
@@ -59,6 +114,15 @@ function Find-SdkTool([string] $name) {
 $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
 if ((Test-Path (Join-Path $vsInstaller 'vswhere.exe')) -and ($env:PATH -notlike "*$vsInstaller*")) {
 	$env:PATH = "$vsInstaller;$env:PATH"
+}
+
+# Publishing into a machine-wide folder is an administrator's job, exactly as it is for any other
+# installer. A path under the user's own profile is let through for development.
+$perUser = [bool](@($env:LOCALAPPDATA, $env:USERPROFILE) |
+	Where-Object { $_ -and $InstallDirectory.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) })
+if (-not $perUser -and -not (Test-Elevated)) {
+	throw "$InstallDirectory is a machine-wide location; re-run this from an elevated prompt, or " +
+		'pass -InstallDirectory pointing somewhere under your user profile.'
 }
 
 # The install directory is the package payload, so it must contain this tool and nothing else: an
@@ -77,6 +141,7 @@ if ($strays) {
 }
 
 Write-Host "==> Publishing to $InstallDirectory" -ForegroundColor Cyan
+Initialize-InstallDirectory $InstallDirectory (-not $perUser)
 foreach ($project in @('HardSpace\HardSpace.csproj', 'HardSpace.ShellExtension\HardSpace.ShellExtension.csproj')) {
 	dotnet publish (Join-Path $toolRoot $project) -c $Configuration -r $RuntimeIdentifier -o $InstallDirectory --nologo
 	if ($LASTEXITCODE -ne 0) { throw "publish failed: $project" }
