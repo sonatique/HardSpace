@@ -96,8 +96,11 @@ internal static unsafe class ScanWindow
 				throw new InvalidOperationException($"RegisterClassEx failed ({Marshal.GetLastWin32Error()}).");
 		}
 
+		// No caption: WS_POPUP drops the title bar, WS_THICKFRAME keeps the window resizable, and
+		// WS_EX_APPWINDOW keeps the taskbar button a popup would otherwise lose -- without it there
+		// would be no way back to the window once something covered it.
 		_window = Win32.CreateWindowEx(
-			0, ClassName, "HardSpace -- " + root, Win32.WS_OVERLAPPEDWINDOW,
+			Win32.WS_EX_APPWINDOW, ClassName, "HardSpace -- " + root, Win32.WS_POPUP | Win32.WS_THICKFRAME,
 			unchecked((int)0x80000000), unchecked((int)0x80000000), DefaultWidth, DefaultHeight,
 			IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
 
@@ -278,6 +281,16 @@ internal static unsafe class ScanWindow
 				case Win32.WM_SIZE:
 					Layout();
 					return IntPtr.Zero;
+
+				// With no title bar to grab, the window's own background becomes the drag handle.
+				// Only the margins around the controls report HTCLIENT -- the text box and buttons
+				// are asked about their own hits -- so this costs nothing that was usable before,
+				// and the resize borders keep whatever DefWindowProc says they are.
+				case Win32.WM_NCHITTEST:
+				{
+					IntPtr hit = Win32.DefWindowProc(hWnd, message, wParam, lParam);
+					return (int)hit == Win32.HTCLIENT ? Win32.HTCAPTION : hit;
+				}
 
 				case WmProgress:
 					Interlocked.Exchange(ref _progressPending, 0);

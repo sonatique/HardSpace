@@ -10,6 +10,9 @@ namespace HardSpace;
 internal static partial class Win32
 {
 	internal const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
+	internal const uint WS_POPUP = 0x80000000;
+	internal const uint WS_THICKFRAME = 0x00040000;
+	internal const uint WS_EX_APPWINDOW = 0x00040000;
 	internal const uint WS_CHILD = 0x40000000;
 	internal const uint WS_VISIBLE = 0x10000000;
 	internal const uint WS_VSCROLL = 0x00200000;
@@ -29,7 +32,11 @@ internal static partial class Win32
 	internal const uint WM_SETFONT = 0x0030;
 	internal const uint WM_COMMAND = 0x0111;
 	internal const uint WM_KEYDOWN = 0x0100;
+	internal const uint WM_NCHITTEST = 0x0084;
 	internal const uint WM_APP = 0x8000;
+
+	internal const int HTCLIENT = 1;
+	internal const int HTCAPTION = 2;
 
 	internal const int VK_ESCAPE = 0x1B;
 	internal const int SW_HIDE = 0;
