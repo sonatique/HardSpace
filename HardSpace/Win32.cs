@@ -32,7 +32,13 @@ internal static partial class Win32
 	internal const uint WM_APP = 0x8000;
 
 	internal const int VK_ESCAPE = 0x1B;
+	internal const int SW_HIDE = 0;
 	internal const int SW_SHOW = 5;
+	internal const uint SWP_NOMOVE = 0x0002;
+
+	internal const int SM_CXVSCROLL = 2;
+	internal const int SM_CYHSCROLL = 3;
+	internal const uint SPI_GETWORKAREA = 0x0030;
 	internal const uint SWP_NOZORDER = 0x0004;
 
 	internal const int COLOR_BTNFACE = 15;
@@ -70,6 +76,13 @@ internal static partial class Win32
 		public uint time;
 		public int ptX;
 		public int ptY;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	internal struct SIZE
+	{
+		public int Width;
+		public int Height;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -149,6 +162,23 @@ internal static partial class Win32
 	[return: MarshalAs(UnmanagedType.Bool)]
 	internal static partial bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
+	[LibraryImport("user32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+	[LibraryImport("user32.dll")]
+	internal static partial int GetSystemMetrics(int index);
+
+	[LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool SystemParametersInfo(uint action, uint param, out RECT rect, uint winIni);
+
+	[LibraryImport("user32.dll")]
+	internal static partial IntPtr GetDC(IntPtr hWnd);
+
+	[LibraryImport("user32.dll")]
+	internal static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
 	[LibraryImport("user32.dll", SetLastError = true)]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	internal static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
@@ -190,6 +220,13 @@ internal static partial class Win32
 	[LibraryImport("gdi32.dll")]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	internal static partial bool DeleteObject(IntPtr hObject);
+
+	[LibraryImport("gdi32.dll")]
+	internal static partial IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
+
+	[LibraryImport("gdi32.dll", EntryPoint = "GetTextExtentPoint32W", StringMarshalling = StringMarshalling.Utf16)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool GetTextExtentPoint32(IntPtr hDC, string text, int length, out SIZE size);
 
 	[LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
 	internal static partial IntPtr GetModuleHandle(string? lpModuleName);

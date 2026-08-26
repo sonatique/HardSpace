@@ -22,6 +22,12 @@ internal static unsafe class ScanWindow
 	private const uint WmProgress = Win32.WM_APP + 1;
 	private const uint WmFinished = Win32.WM_APP + 2;
 
+	// At 96 DPI; scaled to the window's actual DPI as soon as there is a window to ask. Deliberately
+	// modest: it only has to hold the progress line, because the finished report resizes the window
+	// to fit itself and never shrinks it below this.
+	private const int DefaultWidth = 560;
+	private const int DefaultHeight = 380;
+
 	private static readonly CancellationTokenSource Cancellation = new();
 
 	private static IntPtr _window;
@@ -37,6 +43,8 @@ internal static unsafe class ScanWindow
 	private static string _outputText = string.Empty;
 	private static int _progressPending;
 	private static bool _finished;
+	private static bool _succeeded;
+	private static bool _statusVisible = true;
 
 	public static void Run(string root)
 	{
@@ -50,7 +58,8 @@ internal static unsafe class ScanWindow
 			try
 			{
 				ScanResult result = FolderScanner.Scan(root, new WindowProgress(), Cancellation.Token);
-				status = result.Cancelled ? "Cancelled." : "Done.";
+				_succeeded = !result.Cancelled;
+				status = result.Cancelled ? "Cancelled." : string.Empty;
 				output = Report.Build(result);
 			}
 			catch (Exception exception)
@@ -89,7 +98,7 @@ internal static unsafe class ScanWindow
 
 		_window = Win32.CreateWindowEx(
 			0, ClassName, "HardSpace -- " + root, Win32.WS_OVERLAPPEDWINDOW,
-			unchecked((int)0x80000000), unchecked((int)0x80000000), 720, 470,
+			unchecked((int)0x80000000), unchecked((int)0x80000000), DefaultWidth, DefaultHeight,
 			IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
 
 		if (_window == IntPtr.Zero)
@@ -98,6 +107,12 @@ internal static unsafe class ScanWindow
 		_dpi = (int)Win32.GetDpiForWindow(_window);
 		if (_dpi <= 0)
 			_dpi = 96;
+
+		// CreateWindowEx takes raw pixels, so the size above is only right at 96 DPI: on a 175%
+		// display it produced a window barely half the size of its own text. Now that the window
+		// exists and can be asked what DPI it is on, restate the size in those terms.
+		Win32.SetWindowPos(_window, IntPtr.Zero, 0, 0, Scale(DefaultWidth), Scale(DefaultHeight),
+			Win32.SWP_NOZORDER | Win32.SWP_NOMOVE);
 
 		_uiFont = CreateFont("Segoe UI", 9);
 		_monoFont = CreateFont("Consolas", 10);
@@ -150,19 +165,84 @@ internal static unsafe class ScanWindow
 		int buttonHeight = Scale(28);
 		int gap = Scale(8);
 
+		// A finished scan has nothing to say in the status line, so it is taken away entirely and the
+		// report gets the space rather than sitting under a blank strip.
+		int statusBand = _statusVisible ? statusHeight + gap : 0;
+
 		int buttonTop = client.Height - margin - buttonHeight;
-		Win32.SetWindowPos(_status, IntPtr.Zero, margin, margin, client.Width - (2 * margin), statusHeight, Win32.SWP_NOZORDER);
+		if (_statusVisible)
+			Win32.SetWindowPos(_status, IntPtr.Zero, margin, margin, client.Width - (2 * margin), statusHeight, Win32.SWP_NOZORDER);
+
 		Win32.SetWindowPos(
 			_output, IntPtr.Zero,
-			margin, margin + statusHeight + gap,
+			margin, margin + statusBand,
 			client.Width - (2 * margin),
-			Math.Max(0, buttonTop - gap - (margin + statusHeight + gap)),
+			Math.Max(0, buttonTop - gap - (margin + statusBand)),
 			Win32.SWP_NOZORDER);
 		Win32.SetWindowPos(_closeButton, IntPtr.Zero, client.Width - margin - buttonWidth, buttonTop, buttonWidth, buttonHeight, Win32.SWP_NOZORDER);
 		Win32.SetWindowPos(_copyButton, IntPtr.Zero, client.Width - margin - (2 * buttonWidth) - gap, buttonTop, buttonWidth, buttonHeight, Win32.SWP_NOZORDER);
 	}
 
 	private static int Scale(int value) => value * _dpi / 96;
+
+	/// <summary>
+	/// Grows the window so the whole report is visible without scrolling. The report is a handful of
+	/// short lines whose length depends on the folder's name and figures, so measuring beats guessing
+	/// a size that is either too small for a long path or wastefully large for a short one.
+	/// </summary>
+	private static void FitToContent(string text)
+	{
+		if (text.Length == 0)
+			return;
+
+		string[] lines = text.Replace("\r\n", "\n").TrimEnd('\n').Split('\n');
+		string longest = string.Empty;
+		foreach (string line in lines)
+		{
+			if (line.Length > longest.Length)
+				longest = line;
+		}
+
+		IntPtr dc = Win32.GetDC(_output);
+		if (dc == IntPtr.Zero)
+			return;
+
+		Win32.SIZE extent;
+		IntPtr previousFont = Win32.SelectObject(dc, _monoFont);
+		bool measured = Win32.GetTextExtentPoint32(dc, longest, longest.Length, out extent);
+		Win32.SelectObject(dc, previousFont);
+		Win32.ReleaseDC(_output, dc);
+
+		if (!measured || extent.Height <= 0)
+			return;
+
+		int margin = Scale(10);
+		int gap = Scale(8);
+		int buttonHeight = Scale(28);
+		int padding = Scale(8);   // the edit control's own inner border
+
+		int clientWidth = (2 * margin) + extent.Width + padding + Win32.GetSystemMetrics(Win32.SM_CXVSCROLL);
+		int clientHeight = margin + (lines.Length * extent.Height) + padding
+			+ Win32.GetSystemMetrics(Win32.SM_CYHSCROLL) + gap + buttonHeight + margin;
+
+		// The client rectangle has to grow by the frame to become a window size.
+		if (!Win32.GetWindowRect(_window, out Win32.RECT window) || !Win32.GetClientRect(_window, out Win32.RECT client))
+			return;
+
+		int width = clientWidth + (window.Width - client.Width);
+		int height = clientHeight + (window.Height - client.Height);
+
+		// Never shrink below what is already shown, and never outgrow the work area.
+		width = Math.Max(width, window.Width);
+		height = Math.Max(height, window.Height);
+		if (Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, out Win32.RECT workArea, 0))
+		{
+			width = Math.Min(width, workArea.Width);
+			height = Math.Min(height, workArea.Height);
+		}
+
+		Win32.SetWindowPos(_window, IntPtr.Zero, 0, 0, width, height, Win32.SWP_NOZORDER | Win32.SWP_NOMOVE);
+	}
 
 	private static void Pump()
 	{
@@ -211,11 +291,21 @@ internal static unsafe class ScanWindow
 
 				case WmFinished:
 					_finished = true;
-					Win32.SetWindowText(_status, Volatile.Read(ref _statusText));
+					if (_succeeded)
+					{
+						Win32.ShowWindow(_status, Win32.SW_HIDE);
+						_statusVisible = false;
+					}
+					else
+					{
+						Win32.SetWindowText(_status, Volatile.Read(ref _statusText));
+					}
+
 					Win32.SetWindowText(_output, Volatile.Read(ref _outputText));
 					Win32.EnableWindow(_copyButton, true);
 					Win32.SetWindowText(_closeButton, "Close");
 					Win32.SetFocus(_closeButton);
+					FitToContent(Volatile.Read(ref _outputText));
 					return IntPtr.Zero;
 
 				case Win32.WM_COMMAND:
