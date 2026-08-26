@@ -14,6 +14,9 @@ internal static partial class Program
 		  HardSpace -c|--console <dir>  Scan and print the result to the console.
 		  HardSpace --register          Add the Explorer folder context-menu entry (current user).
 		  HardSpace --unregister        Remove that context-menu entry.
+		  --machine                     With either of those: all users instead of the current one.
+		                                Writes to HKLM, so it needs an elevated prompt. Required on
+		                                machines where Explorer ignores per-user verbs.
 		  HardSpace --help              Show this text.
 
 		With no folder given, the current directory is scanned.
@@ -22,8 +25,12 @@ internal static partial class Program
 	[STAThread]
 	private static int Main(string[] args)
 	{
+		// Flags are collected first so that they hold whatever order they were given in: "--register
+		// --machine" and "--machine --register" must mean the same thing.
 		bool console = false;
+		bool machineWide = false;
 		string? path = null;
+		string? action = null;
 
 		foreach (string argument in args)
 		{
@@ -33,19 +40,13 @@ internal static partial class Program
 					console = true;
 					break;
 
-				case "-h" or "--help" or "/?":
-					Tell(Usage, console: true);
-					return 0;
+				case "--machine":
+					machineWide = true;
+					break;
 
-				// Registration reports to the console it was launched from, and to a message box when
-				// there is none -- it is just as likely to be run by double-clicking the executable.
-				case "--register":
-					Tell(ShellIntegration.Register(), console: true);
-					return 0;
-
-				case "--unregister":
-					Tell(ShellIntegration.Unregister(), console: true);
-					return 0;
+				case "-h" or "--help" or "/?" or "--register" or "--unregister":
+					action = argument;
+					break;
 
 				default:
 					if (argument.StartsWith('-'))
@@ -57,6 +58,23 @@ internal static partial class Program
 					path ??= argument;
 					break;
 			}
+		}
+
+		switch (action)
+		{
+			case "-h" or "--help" or "/?":
+				Tell(Usage, console: true);
+				return 0;
+
+			// Registration reports to the console it was launched from, and to a message box when
+			// there is none -- it is just as likely to be run by double-clicking the executable.
+			case "--register":
+				Tell(ShellIntegration.Register(machineWide), console: true);
+				return 0;
+
+			case "--unregister":
+				Tell(ShellIntegration.Unregister(machineWide), console: true);
+				return 0;
 		}
 
 		// Explorer passes the folder with a trailing backslash for a drive root ("D:\") and without

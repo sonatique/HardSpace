@@ -114,13 +114,25 @@ the legacy entry below.
 
 ### The legacy menu ("Show more options")
 
-No package, no certificate, no elevation: the tool writes three keys under
-`HKEY_CURRENT_USER\Software\Classes` itself (`Directory\shell`, `Directory\Background\shell`
-and `Drive\shell`).
+No package and no certificate: the tool writes three keys itself (`Directory\shell`,
+`Directory\Background\shell` and `Drive\shell`), under `HKEY_CURRENT_USER\Software\Classes`:
 
 ```
 HardSpace.exe --register
 ```
+
+If the entry does not appear, restart Explorer. If it appears for a split second and then vanishes,
+this machine is one that ignores per-user verbs -- a machine forcing the Windows 11 classic context
+menu was observed doing exactly that, dropping a plain `notepad.exe` verb the same way -- and the
+registration has to be machine-wide instead, from an elevated prompt:
+
+```
+HardSpace.exe --register --machine
+```
+
+That writes the same three keys under `HKEY_LOCAL_MACHINE\Software\Classes`, so the entry is there
+for every user. `--unregister --machine` removes both hives; `--unregister` alone removes only the
+per-user one.
 
 Register from the folder the executable will live in permanently -- the registry stores that exact
 path, so moving it afterwards breaks the entry (just re-run `--register`). To remove it:
