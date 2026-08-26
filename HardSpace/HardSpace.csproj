@@ -6,6 +6,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<ApplicationIcon>Properties\App.ico</ApplicationIcon>
 	</PropertyGroup>
 
 	<!-- The tool is a fresh process on every context-menu click, so every millisecond of startup is
