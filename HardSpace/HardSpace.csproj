@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>$(NetCoreVersion)-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+	</PropertyGroup>
+
+	<!-- The tool is a fresh process on every context-menu click, so every millisecond of startup is
+	     paid on every single use: publish it fully ahead-of-time. The window is raw user32 rather
+	     than WinForms precisely because WinForms blocks trimming (NETSDK1175) and therefore AOT.
+	     Only a publish with an explicit RID honours these; a plain build ignores them. -->
+	<PropertyGroup>
+		<PublishAot>true</PublishAot>
+		<InvariantGlobalization>false</InvariantGlobalization>
+		<IlcOptimizationPreference>Size</IlcOptimizationPreference>
+	</PropertyGroup>
+
+	<!-- Fallback for a publish that opts out of AOT (-p:PublishAot=false), e.g. to get a small
+	     framework-dependent build for a machine that has the .NET 10 runtime anyway. -->
+	<PropertyGroup Condition="'$(PublishAot)' != 'true'">
+		<PublishReadyToRun>true</PublishReadyToRun>
+		<PublishReadyToRunComposite Condition="'$(SelfContained)' == 'true'">true</PublishReadyToRunComposite>
+	</PropertyGroup>
+
+	<!-- The publish folder is an install location the context menu points at, so it must never be
+	     hard-linked back to obj\: a later publish of a different configuration would then rewrite the
+	     installed files in place, through the link. (The repository this tool came from switches those
+	     links on globally, which is exactly how that was found.) -->
+	<PropertyGroup>
+		<CreateHardLinksForPublishFilesIfPossible>false</CreateHardLinksForPublishFilesIfPossible>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<Company>Ellisys</Company>
+		<Product>HardSpace</Product>
+		<AssemblyVersion>1.0</AssemblyVersion>
+		<Description>Folder size that counts hard-linked files only once.</Description>
+	</PropertyGroup>
+
+</Project>

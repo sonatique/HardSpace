@@ -1,0 +1,13 @@
+<Project>
+
+	<!-- HardSpace was grown inside a larger repository, whose Directory.Build.props supplied these.
+	     They are restated here so the solution stands on its own. -->
+	<PropertyGroup>
+		<NetCoreVersion>net10.0</NetCoreVersion>
+		<LangVersion>14</LangVersion>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+	</PropertyGroup>
+
+</Project>
