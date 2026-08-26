@@ -42,7 +42,7 @@ The tool is a fresh process on every right-click, so start-up time is paid on ev
 with no runtime to find and nothing to JIT.
 
 ```
-dotnet publish HardSpace\HardSpace.csproj -c Release -r win-x64 -o C:\Tools\HardSpace
+dotnet publish HardSpace\HardSpace.csproj -c Release -r win-x64 -o C:\ProgramData\HardSpace
 ```
 
 Measured on this machine, launch to visible window (8 runs, average / best):
@@ -80,18 +80,28 @@ stay in a normal folder that is named at install time.
 Package\Build-Package.ps1 -CreateSelfSignedCertificate
 ```
 
-That publishes both binaries to `C:\Tools\HardSpace` (override with `-InstallDirectory`), packs
+Run it from an **elevated** prompt: it publishes both binaries to `C:\ProgramData\HardSpace`
+(override with `-InstallDirectory`), packs
 `Package\out\HardSpace.msix`, and signs it. It then prints the two install commands; the first
 needs an elevated prompt and is only needed once per machine:
 
 ```
 Import-Certificate -FilePath "...\out\HardSpace.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPeople
-Add-AppxPackage -Path "...\out\HardSpace.msix" -ExternalLocation "C:\Tools\HardSpace"
+Add-AppxPackage -Path "...\out\HardSpace.msix" -ExternalLocation "C:\ProgramData\HardSpace"
 ```
 
 Windows requires the package to be signed by a certificate the machine trusts -- hence the
 certificate step. With a real code-signing certificate, pass `-CertificateThumbprint` instead and
 skip it.
+
+Why elevated: `C:\ProgramData` grants `BUILTIN\Users` a `Write` ACE that its subfolders inherit, so a
+folder created there is writable by any standard user. Explorer loads the extension DLL from that
+folder into *every* user's session, which would let one user run code in another's. The script
+therefore breaks inheritance on the folder it creates and restates the rights -- full control for
+SYSTEM and administrators, read and execute for everyone else -- and publishing into it then needs
+administrator rights, exactly as it would for `C:\Program Files`. Pass an `-InstallDirectory` under
+your own profile (say `%LOCALAPPDATA%\Programs\HardSpace`) for a development install: that is already
+closed to other standard users, so it is left with its inherited ACL and needs no elevation.
 
 The install directory is the package payload, so it must hold this tool and nothing else; the script
 refuses to publish into a directory with anything else in it unless `-Force` is passed, which empties
