@@ -20,7 +20,8 @@ internal static class ShellIntegration
 	private const string MenuText = "Folder size (hard-link aware)";
 
 	// Right-click on a folder, on the background of an open folder, and on a drive. The verb key
-	// holds the label; the "command" subkey holds the command line.
+	// holds the label and the icon; the "command" subkey holds the command line. The icon is simply
+	// the executable, whose first icon resource Explorer extracts.
 	private static readonly (string Path, string Argument)[] Targets =
 	[
 		(@"Software\Classes\Directory\shell\" + KeyName, "\"%1\""),
@@ -43,6 +44,7 @@ internal static class ShellIntegration
 			{
 				using RegistryKey key = Root(machineWide).CreateSubKey(path, writable: true);
 				key.SetValue(null, MenuText);
+				key.SetValue("Icon", executable);
 				using RegistryKey command = key.CreateSubKey("command", writable: true);
 				command.SetValue(null, $"\"{executable}\" {argument}");
 			}
