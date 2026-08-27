@@ -81,9 +81,14 @@ trimming.
 .\Install.ps1
 ```
 
-That copies `HardSpace.exe` into `%LOCALAPPDATA%\Programs\HardSpace`, registers the context-menu
-entry for the current user, and restarts Explorer so it appears. No administrator rights, no
-runtime to install: the executable is self-contained and is the only file involved.
+That copies `HardSpace.exe` into `%LOCALAPPDATA%\Programs\HardSpace` and registers the context-menu
+entry for the current user. No administrator rights, no runtime to install: the executable is
+self-contained and is the only file involved.
+
+Explorer reads context-menu entries when it starts, so the new one may not appear until it
+restarts. The script explains that and asks; answering no prints the ways to do it later. `-RestartExplorer`
+answers yes up front, `-KeepExplorer` neither asks nor restarts, which is also what happens when
+there is no console to ask on.
 
 If the entry does not appear -- or appears for a split second and then vanishes -- the machine
 ignores per-user shell verbs. A machine forcing the Windows 11 classic context menu was observed
