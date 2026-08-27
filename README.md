@@ -44,20 +44,22 @@ the MSVC linker).
 Publishes `deploy\HardSpace.exe`. That one file is the whole deployment: it scans folders, and it
 installs itself.
 
-Where it can, the build also embeds the Windows 11 short-menu pieces -- the shell-extension DLL and
-a signed sparse MSIX package, which `--install` writes out and registers. That takes the executable
-from 3.1 MB to 4.8 MB, and it needs two things a clone may not have: the Windows SDK, to pack and
-sign the package, and a certificate to sign it with. When either is missing the build says so and
-carries on without them:
+It carries everything any machine might need, because the machine it is built on is not the machine
+it will run on. That means the Windows 11 short-menu pieces too -- the shell-extension DLL and a
+signed sparse MSIX package, which `--install` writes out and registers -- taking the executable from
+3.1 MB to 4.8 MB. Whether they are *used* is decided on the target machine, not here.
+
+Packing and signing them needs the Windows SDK, and a certificate; a development one is created if
+there is none. Without the SDK the build stops rather than quietly producing a lesser executable
+that looks identical:
 
 ```
-Windows 11 short menu: left out -- there is no signing certificate; -ShortMenu creates a development one.
-The entry will live under "Show more options" on a stock Windows 11.
+The Windows SDK is needed to pack and sign the short-menu package, and makeappx.exe and signtool.exe
+could not be found. Install the Windows SDK, or pass -NoShortMenu for a build without it.
 ```
 
-`-ShortMenu` insists, creating a development certificate if there is none -- which is a change to
-the certificate store, and so is never done implicitly. `-ShortMenu:$false` leaves them out.
-`-CertificateThumbprint` signs with a certificate of your own instead.
+`-NoShortMenu` is for a quick local build with neither. `-CertificateThumbprint` signs with a
+certificate of your own instead of the development one.
 
 ### Publish (NativeAOT)
 
@@ -147,11 +149,11 @@ first accepts only an `IExplorerCommand` served by a COM server that an MSIX pac
 is no third way.
 
 ```
-.\Build.ps1 -ShortMenu
+.\Build.ps1
 ```
 
-embeds the shell extension and the package in the executable -- which the default build already
-does, where it can -- and on the target machine, from an
+embeds the shell extension and the package in the executable -- which the default build does -- and
+on the target machine, from an
 elevated prompt, `--install` writes them out beside the installed executable, tells the machine to
 trust the package's certificate, and registers the package against that folder. It registers the classic verb as well, which is what
 covers drives -- the package manifest cannot, its schema accepting only `*`, `.<extension>`,
@@ -161,7 +163,7 @@ There is no certificate file anywhere: a signature carries its own signer, so th
 out of `AppxSignature.p7x` inside the package it has just written. The trust step itself is the price of a self-signed package -- it is
 trusted nowhere until a machine is told to, and telling it needs an administrator, once per
 machine. Signing with a
-certificate the machines already trust (`Build.ps1 -ShortMenu -CertificateThumbprint ...`) removes
+certificate the machines already trust (`Build.ps1 -CertificateThumbprint ...`) removes
 that step entirely.
 
 None of this shows on a machine set to the classic context menu, where the short menu never renders.
