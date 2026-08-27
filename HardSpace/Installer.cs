@@ -204,6 +204,13 @@ internal static class Installer
 		try
 		{
 			string trusted = TrustPackageSigner(package);
+
+			// Any registration already there has to go first. A package remembers the folder it was
+			// installed against, and Windows will not move it to another one: installing over it
+			// fails with 0x80073D0B, "already installed with a different external location", which
+			// is exactly what a second install into a different folder is.
+			RunPowerShell("Get-AppxPackage *HardSpace* | Remove-AppxPackage");
+
 			string added = RunPowerShell($"Add-AppxPackage -Path '{package}' -ExternalLocation '{directory}'");
 			return added.Length > 0
 				? $"Short menu: FAILED. {added}"
