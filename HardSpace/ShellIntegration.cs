@@ -35,9 +35,10 @@ internal static class ShellIntegration
 
 	public static string ExecutablePath => Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule!.FileName;
 
-	public static string Register(bool machineWide)
+	public static string Register(bool machineWide) => Register(machineWide, ExecutablePath);
+
+	public static string Register(bool machineWide, string executable)
 	{
-		string executable = ExecutablePath;
 		try
 		{
 			foreach ((string path, string argument) in Targets)

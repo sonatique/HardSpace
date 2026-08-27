@@ -12,7 +12,16 @@ internal static partial class Program
 
 		  HardSpace <folder>            Scan a folder and show the result in a window.
 		  HardSpace -c|--console <dir>  Scan and print the result to the console.
-		  HardSpace --register          Add the Explorer folder context-menu entry (current user).
+		  HardSpace --install [folder]  Install: copy this executable somewhere permanent and add it
+		                                to Explorer's context menu. Elevated it installs for every
+		                                user, and adds the Windows 11 short-menu package this build
+		                                carries; otherwise for the current user only.
+		    --user, --machine           Force the scope instead of taking the best available.
+		    --no-short-menu             Leave the Windows 11 short-menu package out.
+		    --quiet                     Do not ask about restarting Explorer.
+		  HardSpace --uninstall         Undo all of that.
+
+		  HardSpace --register          Add the context-menu entry for this executable, where it is.
 		  HardSpace --unregister        Remove that context-menu entry.
 		  --machine                     With either of those: all users instead of the current one.
 		                                Writes to HKLM, so it needs an elevated prompt. Required on
@@ -29,6 +38,9 @@ internal static partial class Program
 		// --machine" and "--machine --register" must mean the same thing.
 		bool console = false;
 		bool machineWide = false;
+		bool currentUserOnly = false;
+		bool? shortMenu = null;
+		bool quiet = false;
 		string? path = null;
 		string? action = null;
 
@@ -44,7 +56,23 @@ internal static partial class Program
 					machineWide = true;
 					break;
 
-				case "-h" or "--help" or "/?" or "--register" or "--unregister":
+				case "--user":
+					currentUserOnly = true;
+					break;
+
+				case "--short-menu":
+					shortMenu = true;
+					break;
+
+				case "--no-short-menu":
+					shortMenu = false;
+					break;
+
+				case "--quiet":
+					quiet = true;
+					break;
+
+				case "-h" or "--help" or "/?" or "--register" or "--unregister" or "--install" or "--uninstall":
 					action = argument;
 					break;
 
@@ -75,6 +103,25 @@ internal static partial class Program
 			case "--unregister":
 				Tell(ShellIntegration.Unregister(machineWide), console: true);
 				return 0;
+
+			// The whole install, from one file: copy this executable somewhere permanent, register it,
+			// and put in the short-menu package if this build carries one and the prompt allows it.
+			case "--install":
+				return Installer.Install(new InstallOptions
+				{
+					Scope = machineWide ? Scope.Machine : currentUserOnly ? Scope.CurrentUser : Scope.Best,
+					ShortMenu = shortMenu,
+					Directory = path,
+					Quiet = quiet,
+				});
+
+			case "--uninstall":
+				return Installer.Uninstall(new InstallOptions
+				{
+					Scope = currentUserOnly ? Scope.CurrentUser : machineWide ? Scope.Machine : Scope.Best,
+					Directory = path,
+					Quiet = quiet,
+				});
 		}
 
 		// Explorer passes the folder with a trailing backslash for a drive root ("D:\") and without
