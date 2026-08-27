@@ -37,7 +37,7 @@
 
 [CmdletBinding()]
 param(
-	[string] $OutputDirectory = (Join-Path $PSScriptRoot 'deploy'),
+	[string] $OutputDirectory,
 	[string] $Configuration = 'Release',
 	[string] $RuntimeIdentifier = 'win-x64',
 	[switch] $NoShortMenu,
@@ -45,6 +45,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# $PSScriptRoot is not populated while parameter defaults are being bound under `powershell -File`,
+# so the script's own folder is worked out here, in the body, and the defaults are filled in after.
+$root = $PSScriptRoot
+if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root 'deploy' }
 
 # Everything that any machine might need goes in, because the machine this is built for is not the
 # machine it will run on: whoever gets this executable should not be short of a piece of it.
@@ -78,13 +85,13 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 # What the executable carries is what it can install, so its payload is emptied every time: a
 # -NoShortMenu build must not quietly ship the package left behind by an earlier one.
-$embedded = Join-Path $PSScriptRoot 'HardSpace\Embedded'
+$embedded = Join-Path $root 'HardSpace\Embedded'
 New-Item -ItemType Directory -Force -Path $embedded | Out-Null
 Get-ChildItem -LiteralPath $embedded -File | Remove-Item -Force
 
 if ($ShortMenu) {
 	Write-Host '==> Building the shell extension' -ForegroundColor Cyan
-	dotnet publish (Join-Path $PSScriptRoot 'HardSpace.ShellExtension\HardSpace.ShellExtension.csproj') `
+	dotnet publish (Join-Path $root 'HardSpace.ShellExtension\HardSpace.ShellExtension.csproj') `
 		-c $Configuration -r $RuntimeIdentifier -o $embedded --nologo
 	if ($LASTEXITCODE -ne 0) { throw 'publish failed: HardSpace.ShellExtension' }
 	Get-ChildItem -LiteralPath $embedded -Filter *.pdb | Remove-Item -Force
@@ -93,11 +100,11 @@ if ($ShortMenu) {
 	$packageArguments = @{ OutputDirectory = $embedded }
 	if ($CertificateThumbprint) { $packageArguments.CertificateThumbprint = $CertificateThumbprint }
 	else { $packageArguments.CreateSelfSignedCertificate = $true }
-	& (Join-Path $PSScriptRoot 'Package\Build-Package.ps1') @packageArguments
+	& (Join-Path $root 'Package\Build-Package.ps1') @packageArguments
 }
 
 Write-Host '==> Publishing' -ForegroundColor Cyan
-dotnet publish (Join-Path $PSScriptRoot 'HardSpace\HardSpace.csproj') `
+dotnet publish (Join-Path $root 'HardSpace\HardSpace.csproj') `
 	-c $Configuration -r $RuntimeIdentifier -o $OutputDirectory --nologo
 if ($LASTEXITCODE -ne 0) { throw 'publish failed.' }
 

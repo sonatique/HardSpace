@@ -38,6 +38,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $packageRoot = $PSScriptRoot
+if (-not $packageRoot) { $packageRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $stagingDirectory = Join-Path $packageRoot 'obj\staging'
 $developmentSubject = 'CN=HardSpace Development'
 
