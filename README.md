@@ -41,11 +41,12 @@ the MSVC linker).
 .\Build.ps1
 ```
 
-Publishes and leaves two equivalent things: `deploy\`, to install straight from a build, and
-`HardSpace.zip`, which is the same folder as one file to send someone.
+Publishes `deploy\HardSpace.exe`. That one file is the whole deployment: it scans folders, and it
+installs itself.
 
-Add `-ShortMenu` to also build the pieces for Windows 11's short menu -- the shell-extension DLL and
-a signed sparse package. See below for what that buys and what it costs.
+Add `-ShortMenu` and the executable also *carries* the Windows 11 short-menu pieces -- the
+shell-extension DLL and a signed sparse MSIX package, embedded as resources, which `--install`
+writes out and registers. It grows from 2.0 MB to 4.8 MB. See below for what that buys and costs.
 
 ### Publish (NativeAOT)
 
@@ -81,7 +82,7 @@ trimming.
 ## Install
 
 ```
-.\Install.ps1
+HardSpace.exe --install
 ```
 
 One command, whatever the machine. It works out the best install available and says what it chose:
@@ -89,45 +90,35 @@ One command, whatever the machine. It works out the best install available and s
 | Run as | What you get |
 | --- | --- |
 | yourself | `%LOCALAPPDATA%\Programs\HardSpace`, entry for you only |
-| administrator | `%ProgramFiles%\HardSpace`, entry for every user -- and the Windows 11 short-menu package too, if the folder was built with `-ShortMenu` |
+| administrator | `%ProgramFiles%\HardSpace`, entry for every user -- and the Windows 11 short menu, if the executable was built with `-ShortMenu` |
 
 Elevated is the one to prefer: some machines ignore per-user verbs entirely, and only an elevated
-install can reach Windows 11's short menu. Neither needs a runtime installed -- the executable is
-self-contained.
+install can reach Windows 11's short menu. Neither needs a runtime installed.
 
-`-Machine:$false` and `-ShortMenu:$false` override the decision; `-Machine` and `-ShortMenu` demand
-it and fail loudly if the prompt is not elevated.
+`--user` and `--machine` force the scope; `--no-short-menu` leaves the package out; `--quiet` skips
+the question about restarting Explorer; `--uninstall` undoes all of it. An install folder can be
+given as the argument: `--install "C:\Tools\HardSpace"`.
 
-Explorer reads context-menu entries when it starts, so the new one may not appear until it
-restarts. The script explains that and asks; answering no prints the ways to do it later. `-RestartExplorer`
-answers yes up front, `-KeepExplorer` neither asks nor restarts, which is also what happens when
-there is no console to ask on.
+Explorer reads context-menu entries when it starts, so the new one may not appear until it restarts.
+The installer explains that and asks -- at the console it was run from, or in a message box if there
+is none -- and says how to do it later if the answer is no.
 
-If the entry does not appear -- or appears for a split second and then vanishes -- the machine
-ignores per-user shell verbs. A machine forcing the Windows 11 classic context menu was observed
-doing exactly that, and dropping a plain `notepad.exe` verb the same way, so it is worth testing
-with one before blaming this tool. The cure is to register for the machine instead, from an
-**elevated** prompt:
+If the entry does not appear, or appears for a split second and then vanishes, the machine ignores
+per-user shell verbs. A machine forcing the Windows 11 classic context menu was observed doing
+exactly that, and dropping a plain `notepad.exe` verb the same way, so it is worth testing with one
+before blaming this tool. The cure is an elevated `--install`, which registers for the machine.
 
-```
-.\Install.ps1 -Machine
-```
-
-which installs to `%ProgramFiles%\HardSpace` and writes the same three keys under `HKLM`.
-
-To remove, with `-Machine` if that is how it went in:
-
-```
-.\Install.ps1 -Uninstall
-```
+Because it is a Windows-subsystem program, a shell does not wait for it. From a script, use
+`Start-Process -Wait HardSpace.exe -ArgumentList '--install','--quiet'` if the exit code matters.
 
 ### Installing on someone else's machine
 
-Run `.\Build.ps1` and send them `HardSpace.zip`. They unzip it anywhere and run `Install.ps1`. If the executable arrives
-by mail or chat it carries a mark of the web and SmartScreen stops it on first run; the script
-clears that with `Unblock-File`, but they will still see the prompt if they run the executable
-before the script. Copying through a network share or a USB stick avoids the mark entirely.
-Signing would not help: the certificate would have to be one their machine already trusts.
+Run `.\Build.ps1 -ShortMenu` and send them `deploy\HardSpace.exe`. One file, and it installs itself.
+
+If it arrives by mail or chat it carries a mark of the web, and SmartScreen stops it on first run --
+"Windows protected your PC", *More info*, *Run anyway*. Copying through a network share or a USB
+stick avoids that. Signing would not help unless the certificate is one their machine already
+trusts.
 
 ### What it registers
 
@@ -148,20 +139,14 @@ is no third way.
 .\Build.ps1 -ShortMenu
 ```
 
-adds `HardSpace.ShellExtension.dll` and `HardSpace.msix` to the handover, and on the target
-machine, from an elevated prompt:
-
-```
-.\Install.ps1 -ShortMenu
-```
-
-installs the payload machine-wide, tells the machine to trust the package's certificate, and
-registers the package against that folder. It registers the classic verb as well, which is what
+embeds the shell extension and the package in the executable, and on the target machine, from an
+elevated prompt, `--install` writes them out beside the installed executable, tells the machine to
+trust the package's certificate, and registers the package against that folder. It registers the classic verb as well, which is what
 covers drives -- the package manifest cannot, its schema accepting only `*`, `.<extension>`,
 `Directory` and `Directory\Background`.
 
-There is no certificate file to ship: a signature carries its own signer, so the installer reads the
-certificate out of the package. The trust step itself is the price of a self-signed package -- it is
+There is no certificate file anywhere: a signature carries its own signer, so the installer reads it
+out of `AppxSignature.p7x` inside the package it has just written. The trust step itself is the price of a self-signed package -- it is
 trusted nowhere until a machine is told to, and telling it needs an administrator, once per
 machine. Signing with a
 certificate the machines already trust (`Build.ps1 -ShortMenu -CertificateThumbprint ...`) removes

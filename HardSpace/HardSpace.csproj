@@ -34,6 +34,16 @@
 		<CreateHardLinksForPublishFilesIfPossible>false</CreateHardLinksForPublishFilesIfPossible>
 	</PropertyGroup>
 
+	<!-- The shell extension and the package are carried inside this executable, so that deploying
+	     HardSpace is copying one file. Build.ps1 puts them here; the globs are conditional because a
+	     plain build, and a build of the classic-menu-only flavour, has neither. -->
+	<ItemGroup>
+		<EmbeddedResource Include="Embedded\*" />
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.11" />
+	</ItemGroup>
+
 	<PropertyGroup>
 		<Company>Ellisys</Company>
 		<Product>HardSpace</Product>
