@@ -158,6 +158,17 @@ before blaming this tool. The cure is an elevated `--install`, which registers f
 Because it is a Windows-subsystem program, a shell does not wait for it. From a script, use
 `Start-Process -Wait HardSpace.exe -ArgumentList '--install','--quiet'` if the exit code matters.
 
+### Publishing to the Microsoft Store
+
+A second, different package: self-contained rather than sparse, signed by Microsoft rather than by
+you, and without the registry verbs a packaged app cannot write. It is built by
+`Package\Build-StorePackage.ps1`, and [docs/PUBLISHING-TO-THE-STORE.md](docs/PUBLISHING-TO-THE-STORE.md)
+walks through the whole thing from having no developer account to the app being public.
+
+Worth knowing before starting: a Store install shows **nothing at all** on a machine set to the
+classic context menu, because the registry verb is the only thing that reaches that menu and a
+packaged app cannot write one. The standalone build above stays the answer for those machines.
+
 ### Installing on someone else's machine
 
 Run `.\Build.ps1` and send them `deploy\HardSpace.exe`. One file, and it installs itself.

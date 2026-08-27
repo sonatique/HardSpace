@@ -381,6 +381,13 @@ internal static partial class Win32
 	[LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
 	internal static partial IntPtr GetModuleHandle(string? lpModuleName);
 
+	// Returns APPMODEL_ERROR_NO_PACKAGE when the process has no package identity, which is how a
+	// program tells whether it was deployed as an app or simply copied somewhere.
+	internal const int APPMODEL_ERROR_NO_PACKAGE = 15700;
+
+	[LibraryImport("kernel32.dll", EntryPoint = "GetCurrentPackageFullName")]
+	internal static partial int GetCurrentPackageFullName(ref int length, IntPtr name);
+
 	[LibraryImport("kernel32.dll", EntryPoint = "LoadLibraryW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
 	internal static partial IntPtr LoadLibrary(string lpLibFileName);
 

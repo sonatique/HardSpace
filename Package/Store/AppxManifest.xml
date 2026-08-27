@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- The Store package. Unlike the sparse package beside it, this one carries its own payload: the
+     Store will not accept a package whose content lives in a folder on the target machine, so
+     HardSpace.exe and HardSpace.ShellExtension.dll are inside it and Windows installs them where it
+     keeps packaged apps. Nothing installs itself; there is no external location, and no registry
+     verb, because a packaged app cannot write one that Explorer would read.
+
+     Identity is assigned by Partner Center, not chosen here: Build-StorePackage.ps1 substitutes the
+     three IDENTITY_ placeholders with what the reserved name gives you. -->
+
+<Package
+	xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+	xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+	xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+	xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+	xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+	xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+	xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+	xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+	IgnorableNamespaces="uap uap5 uap10 desktop4 desktop5 com rescap">
+
+	<Identity Name="IDENTITY_NAME" Publisher="IDENTITY_PUBLISHER" Version="IDENTITY_VERSION" ProcessorArchitecture="x64" />
+
+	<Properties>
+		<DisplayName>HardSpace</DisplayName>
+		<PublisherDisplayName>IDENTITY_PUBLISHER_DISPLAY_NAME</PublisherDisplayName>
+		<Logo>Images\StoreLogo.png</Logo>
+	</Properties>
+
+	<Dependencies>
+		<!-- 10.0.22000 is Windows 11: the context menu this adds to does not exist before it. -->
+		<TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+	</Dependencies>
+
+	<Resources>
+		<Resource Language="en-us" />
+	</Resources>
+
+	<Capabilities>
+		<!-- A full-trust desktop application: it reads file metadata across the whole disk, which no
+		     sandboxed capability covers. This is what puts the submission in front of a human
+		     reviewer, so the listing has to say plainly why the app needs it. -->
+		<rescap:Capability Name="runFullTrust" />
+	</Capabilities>
+
+	<Applications>
+		<Application Id="HardSpace" Executable="HardSpace.exe" EntryPoint="Windows.FullTrustApplication">
+
+			<uap:VisualElements
+				DisplayName="HardSpace"
+				Description="Folder size that counts hard-linked files only once."
+				BackgroundColor="transparent"
+				Square150x150Logo="Images\Square150x150Logo.png"
+				Square44x44Logo="Images\Square44x44Logo.png" />
+
+			<Extensions>
+				<!-- The COM server behind the context-menu command, in-process in Explorer's surrogate. -->
+				<com:Extension Category="windows.comServer">
+					<com:ComServer>
+						<com:SurrogateServer DisplayName="HardSpace context menu">
+							<com:Class Id="6D8C3B1A-9E2F-4B7C-8A15-3F0D5C7E9A42" Path="HardSpace.ShellExtension.dll" ThreadingModel="STA" />
+						</com:SurrogateServer>
+					</com:ComServer>
+				</com:Extension>
+
+				<!-- The entry itself, in Windows 11's default menu. A packaged app has no other way in:
+				     the registry verbs the standalone build writes are not available to it. -->
+				<desktop4:Extension Category="windows.fileExplorerContextMenus">
+					<desktop4:FileExplorerContextMenus>
+						<desktop5:ItemType Type="Directory">
+							<desktop5:Verb Id="HardSpaceFolderSize" Clsid="6D8C3B1A-9E2F-4B7C-8A15-3F0D5C7E9A42" />
+						</desktop5:ItemType>
+						<desktop5:ItemType Type="Directory\Background">
+							<desktop5:Verb Id="HardSpaceFolderSize" Clsid="6D8C3B1A-9E2F-4B7C-8A15-3F0D5C7E9A42" />
+						</desktop5:ItemType>
+					</desktop4:FileExplorerContextMenus>
+				</desktop4:Extension>
+
+				<!-- So that HardSpace can be run from a terminal, with a folder to scan, which a
+				     packaged app does not get for free: its executable is not on the path. -->
+				<uap5:Extension Category="windows.appExecutionAlias">
+					<uap5:AppExecutionAlias>
+						<uap5:ExecutionAlias Alias="HardSpace.exe" />
+					</uap5:AppExecutionAlias>
+				</uap5:Extension>
+			</Extensions>
+		</Application>
+	</Applications>
+
+</Package>

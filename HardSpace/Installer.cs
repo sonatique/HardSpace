@@ -48,8 +48,33 @@ internal static class Installer
 	private const string ExtensionResource = "HardSpace.Embedded." + ExtensionName;
 	private const string PackageResource = "HardSpace.Embedded." + PackageName;
 
+	/// <summary>
+	/// Whether this copy was deployed as a package -- from the Store, or sideloaded -- rather than
+	/// copied somewhere by hand. A packaged copy is installed and removed by Windows, so everything
+	/// this class does is both unnecessary and impossible: its registry writes go to a virtualised
+	/// hive that nothing else reads, and its files live in a folder it may not write to.
+	/// </summary>
+	public static bool IsPackaged
+	{
+		get
+		{
+			// Asking with no buffer: the answer wanted is the error code, not the name.
+			int length = 0;
+			return Win32.GetCurrentPackageFullName(ref length, IntPtr.Zero) != Win32.APPMODEL_ERROR_NO_PACKAGE;
+		}
+	}
+
 	public static int Install(InstallOptions options)
 	{
+		if (IsPackaged)
+		{
+			Ui.Tell("This copy of HardSpace was installed by Windows, from the Store or a package, and "
+				+ "is managed there: its context-menu entry comes with the package and needs no "
+				+ "installing.\r\n\r\nRemove it from Settings > Apps, or with "
+				+ "Get-AppxPackage *HardSpace* | Remove-AppxPackage.");
+			return 0;
+		}
+
 		bool elevated = IsElevated();
 		bool carriesPackage = HasResource(ExtensionResource) && HasResource(PackageResource);
 		bool shortMenu = options.ShortMenu ?? (elevated && carriesPackage);
@@ -130,6 +155,13 @@ internal static class Installer
 
 	public static int Uninstall(InstallOptions options)
 	{
+		if (IsPackaged)
+		{
+			Ui.Tell("This copy was installed by Windows as a package. Remove it from Settings > Apps, or "
+				+ "with Get-AppxPackage *HardSpace* | Remove-AppxPackage.");
+			return 0;
+		}
+
 		bool elevated = IsElevated();
 		bool machineWide = options.Scope != Scope.CurrentUser && elevated;
 
