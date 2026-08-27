@@ -42,7 +42,7 @@ The tool is a fresh process on every right-click, so start-up time is paid on ev
 with no runtime to find and nothing to JIT.
 
 ```
-dotnet publish HardSpace\HardSpace.csproj -c Release -r win-x64 -o C:\ProgramData\HardSpace
+dotnet publish HardSpace\HardSpace.csproj -c Release -r win-x64 -o publish
 ```
 
 Measured on this machine, launch to visible window (8 runs, average / best):
@@ -66,83 +66,55 @@ The window is written directly against user32 rather than WinForms. That is what
 at all: `PublishTrimmed` on a WinForms project fails with NETSDK1175, and NativeAOT implies
 trimming.
 
-## Install the right-click entry
-
-There are two menus in Windows 11, and they are registered differently.
-
-### The short menu (Windows 11)
-
-The top-level menu only accepts an `IExplorerCommand` that comes from an MSIX package, so
-`Package\` builds a *sparse* package: it carries the manifest and nothing else, while the binaries
-stay in a normal folder that is named at install time.
+## Install
 
 ```
-Package\Build-Package.ps1 -CreateSelfSignedCertificate
+.\Install.ps1
 ```
 
-Run it from an **elevated** prompt: it publishes both binaries to `C:\ProgramData\HardSpace`
-(override with `-InstallDirectory`), packs
-`Package\out\HardSpace.msix`, and signs it. It then prints the two install commands; the first
-needs an elevated prompt and is only needed once per machine:
+That copies `HardSpace.exe` into `%LOCALAPPDATA%\Programs\HardSpace`, registers the context-menu
+entry for the current user, and restarts Explorer so it appears. No administrator rights, no
+runtime to install: the executable is self-contained and is the only file involved.
+
+If the entry does not appear -- or appears for a split second and then vanishes -- the machine
+ignores per-user shell verbs. A machine forcing the Windows 11 classic context menu was observed
+doing exactly that, and dropping a plain `notepad.exe` verb the same way, so it is worth testing
+with one before blaming this tool. The cure is to register for the machine instead, from an
+**elevated** prompt:
 
 ```
-Import-Certificate -FilePath "...\out\HardSpace.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPeople
-Add-AppxPackage -Path "...\out\HardSpace.msix" -ExternalLocation "C:\ProgramData\HardSpace"
+.\Install.ps1 -Machine
 ```
 
-Windows requires the package to be signed by a certificate the machine trusts -- hence the
-certificate step. With a real code-signing certificate, pass `-CertificateThumbprint` instead and
-skip it.
+which installs to `%ProgramFiles%\HardSpace` and writes the same three keys under `HKLM`.
 
-Why elevated: `C:\ProgramData` grants `BUILTIN\Users` a `Write` ACE that its subfolders inherit, so a
-folder created there is writable by any standard user. Explorer loads the extension DLL from that
-folder into *every* user's session, which would let one user run code in another's. The script
-therefore breaks inheritance on the folder it creates and restates the rights -- full control for
-SYSTEM and administrators, read and execute for everyone else -- and publishing into it then needs
-administrator rights, exactly as it would for `C:\Program Files`. Pass an `-InstallDirectory` under
-your own profile (say `%LOCALAPPDATA%\Programs\HardSpace`) for a development install: that is already
-closed to other standard users, so it is left with its inherited ACL and needs no elevation.
-
-The install directory is the package payload, so it must hold this tool and nothing else; the script
-refuses to publish into a directory with anything else in it unless `-Force` is passed, which empties
-it first. That path is baked into the package: moving the binaries afterwards means installing
-again. To remove: `Get-AppxPackage *HardSpace* | Remove-AppxPackage`.
-
-The manifest covers folders and the background of an open folder. Drives are not offered -- the
-schema only accepts `*`, `.<extension>`, `Directory` and `Directory\Background` -- so a drive keeps
-the legacy entry below.
-
-### The legacy menu ("Show more options")
-
-No package and no certificate: the tool writes three keys itself (`Directory\shell`,
-`Directory\Background\shell` and `Drive\shell`), under `HKEY_CURRENT_USER\Software\Classes`:
+To remove, with `-Machine` if that is how it went in:
 
 ```
-HardSpace.exe --register
+.\Install.ps1 -Uninstall
 ```
 
-If the entry does not appear, restart Explorer. If it appears for a split second and then vanishes,
-this machine is one that ignores per-user verbs -- a machine forcing the Windows 11 classic context
-menu was observed doing exactly that, dropping a plain `notepad.exe` verb the same way -- and the
-registration has to be machine-wide instead, from an elevated prompt:
+### Installing on someone else's machine
 
-```
-HardSpace.exe --register --machine
-```
+Send them `HardSpace.exe` and `Install.ps1`, side by side -- nothing else. If the executable arrives
+by mail or chat it carries a mark of the web and SmartScreen stops it on first run; the script
+clears that with `Unblock-File`, but they will still see the prompt if they run the executable
+before the script. Copying through a network share or a USB stick avoids the mark entirely.
+Signing would not help: the certificate would have to be one their machine already trusts.
 
-That writes the same three keys under `HKEY_LOCAL_MACHINE\Software\Classes`, so the entry is there
-for every user. `--unregister --machine` removes both hives; `--unregister` alone removes only the
-per-user one.
+### What it registers
 
-Register from the folder the executable will live in permanently -- the registry stores that exact
-path, so moving it afterwards breaks the entry (just re-run `--register`). To remove it:
+Three keys under `Software\Classes`, in `HKEY_CURRENT_USER` or `HKEY_LOCAL_MACHINE` depending on the
+scope: `Directory\shell` for a folder, `Directory\Background\shell` for the empty space inside an
+open folder, and `Drive\shell` for a drive. On Windows 11 the entry appears under **Show more
+options** (Shift+F10) unless the machine has been set to use the classic menu, where it is in the
+menu proper.
 
-```
-HardSpace.exe --unregister
-```
-
-Installing both is fine, and is what gives every case a menu entry; the verb then appears twice for
-a folder, once in each menu.
+Windows 11's *short* menu -- the one that appears first -- takes only an `IExplorerCommand` served
+by a COM server that an MSIX package declares. That route was built here and then removed: it does
+not work at all on a machine configured for the classic context menu, and it costs a signed package
+plus a certificate the target machine trusts. It is in the history if it is ever wanted again
+(`git log -- Package HardSpace.ShellExtension`).
 
 ## Command line
 
@@ -163,12 +135,6 @@ the de-duplication set, so a tree without hard links costs nothing extra.
 
 Junctions and directory symlinks are not followed, and symlinks to files are not counted: their
 content is counted where it really lives. They are reported as a separate count.
-
-The Windows 11 command lives in `HardSpace.ShellExtension`, a NativeAOT *shared library*: Explorer
-loads it into its surrogate process on every right-click, so a managed runtime start-up per click is
-exactly what it must not cost. It exports `DllGetClassObject`/`DllCanUnloadNow` directly, implements
-`IExplorerCommand` through source-generated COM interop, and reads the clicked folder out of the
-`IShellItemArray` through its vtable. Clicking the verb starts `HardSpace.exe` from beside the DLL.
 
 Files whose metadata cannot be read (ACL, exclusive lock) are counted as unique, with their
 directory-entry size — the same answer Explorer gives — and reported as "unreadable entries".
