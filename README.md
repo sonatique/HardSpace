@@ -35,6 +35,15 @@ dotnet build HardSpace.sln -c Release
 Requires the .NET 10 SDK, plus the "Desktop development with C++" workload (NativeAOT links with
 the MSVC linker).
 
+### Deploy
+
+```
+.\Build.ps1
+```
+
+Publishes and leaves `deploy\` holding the two files that are the whole deployment: `HardSpace.exe`
+and `Install.ps1`. Copy that folder to the machine that needs it and run the script there.
+
 ### Publish (NativeAOT)
 
 The tool is a fresh process on every right-click, so start-up time is paid on every single use.
@@ -96,7 +105,7 @@ To remove, with `-Machine` if that is how it went in:
 
 ### Installing on someone else's machine
 
-Send them `HardSpace.exe` and `Install.ps1`, side by side -- nothing else. If the executable arrives
+Run `.\Build.ps1` and send them `deploy\`, which holds exactly those two files and nothing else. If the executable arrives
 by mail or chat it carries a mark of the web and SmartScreen stops it on first run; the script
 clears that with `Unblock-File`, but they will still see the prompt if they run the executable
 before the script. Copying through a network share or a USB stick avoids the mark entirely.
