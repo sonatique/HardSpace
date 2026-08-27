@@ -18,7 +18,8 @@ internal static partial class Program
 		                                carries; otherwise for the current user only.
 		    --user, --machine           Force the scope instead of taking the best available.
 		    --no-short-menu             Leave the Windows 11 short-menu package out.
-		    --quiet                     Do not ask about restarting Explorer.
+		    --quiet                     Do not ask about Explorer, and do not restart it.
+		    --restart-explorer          Restart Explorer without asking.
 		  HardSpace --uninstall         Undo all of that.
 
 		  HardSpace --register          Add the context-menu entry for this executable, where it is.
@@ -41,6 +42,7 @@ internal static partial class Program
 		bool currentUserOnly = false;
 		bool? shortMenu = null;
 		bool quiet = false;
+		bool restartExplorer = false;
 		string? path = null;
 		string? action = null;
 
@@ -70,6 +72,10 @@ internal static partial class Program
 
 				case "--quiet":
 					quiet = true;
+					break;
+
+				case "--restart-explorer":
+					restartExplorer = true;
 					break;
 
 				case "-h" or "--help" or "/?" or "--register" or "--unregister" or "--install" or "--uninstall":
@@ -113,6 +119,7 @@ internal static partial class Program
 					ShortMenu = shortMenu,
 					Directory = path,
 					Quiet = quiet,
+					RestartExplorer = restartExplorer,
 				});
 
 			case "--uninstall":
@@ -121,6 +128,7 @@ internal static partial class Program
 					Scope = currentUserOnly ? Scope.CurrentUser : machineWide ? Scope.Machine : Scope.Best,
 					Directory = path,
 					Quiet = quiet,
+					RestartExplorer = restartExplorer,
 				});
 		}
 

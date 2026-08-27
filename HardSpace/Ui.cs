@@ -33,23 +33,18 @@ internal static partial class Ui
 	}
 
 	/// <summary>
-	/// Puts a yes/no question to whoever is there to answer it. With no console and no desktop to
-	/// show a box on -- an unattended run -- the answer is no: this is only ever used for things
-	/// that are the caller's to consent to.
+	/// Puts a yes/no question, always in a message box, never at the console.
 	/// </summary>
+	/// <remarks>
+	/// This is a Windows-subsystem program, so a shell does not wait for it: cmd hands back its
+	/// prompt the moment this starts, and is itself reading the keyboard. A console this process
+	/// borrowed is therefore never its own to read from -- an answer typed at it goes to the shell,
+	/// which tries to run it as a command. Writing to that console is fine; reading is not.
+	/// A box needs a desktop; with none, the answer is no, which is the safe way for consent to
+	/// fail.
+	/// </remarks>
 	public static bool Ask(string question)
-	{
-		if (HasConsole())
-		{
-			Console.Out.WriteLine(question);
-			Console.Out.Write("[y/N] ");
-			Console.Out.Flush();
-			string? answer = Console.In.ReadLine();
-			return answer is not null && answer.Trim().StartsWith("y", StringComparison.OrdinalIgnoreCase);
-		}
-
-		return Win32.MessageBox(IntPtr.Zero, question, "HardSpace", MB_YESNO | MB_ICONQUESTION) == IDYES;
-	}
+		=> Win32.MessageBox(IntPtr.Zero, question, "HardSpace", MB_YESNO | MB_ICONQUESTION) == IDYES;
 
 	private static bool HasConsole()
 	{
