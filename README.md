@@ -44,6 +44,10 @@ the MSVC linker).
 Publishes and leaves `deploy\` holding the two files that are the whole deployment: `HardSpace.exe`
 and `Install.ps1`. Copy that folder to the machine that needs it and run the script there.
 
+Add `-ShortMenu` to also build the pieces for Windows 11's short menu -- the shell-extension DLL and
+a signed sparse package -- which makes it five files instead of two. See below for what that buys
+and what it costs.
+
 ### Publish (NativeAOT)
 
 The tool is a fresh process on every right-click, so start-up time is paid on every single use.
@@ -124,11 +128,35 @@ open folder, and `Drive\shell` for a drive. On Windows 11 the entry appears unde
 options** (Shift+F10) unless the machine has been set to use the classic menu, where it is in the
 menu proper.
 
-Windows 11's *short* menu -- the one that appears first -- takes only an `IExplorerCommand` served
-by a COM server that an MSIX package declares. That route was built here and then removed: it does
-not work at all on a machine configured for the classic context menu, and it costs a signed package
-plus a certificate the target machine trusts. It is in the history if it is ever wanted again
-(`git log -- Package HardSpace.ShellExtension`).
+### The short menu (stock Windows 11)
+
+On a machine with Windows 11's default context menu, a registry verb -- which is all `--register`
+can write, in either hive -- always lands under **Show more options**. The short menu that opens
+first accepts only an `IExplorerCommand` served by a COM server that an MSIX package declares. There
+is no third way.
+
+```
+.\Build.ps1 -ShortMenu
+```
+
+adds `HardSpace.ShellExtension.dll`, `HardSpace.msix` and `HardSpace.cer` to `deploy\`, and on the
+target machine, from an elevated prompt:
+
+```
+.\Install.ps1 -ShortMenu
+```
+
+installs the payload machine-wide, tells the machine to trust the package's certificate, and
+registers the package against that folder. It registers the classic verb as well, which is what
+covers drives -- the package manifest cannot, its schema accepting only `*`, `.<extension>`,
+`Directory` and `Directory\Background`.
+
+The certificate step is the price of a self-signed package: it is trusted nowhere until a machine is
+told to trust it, and telling it needs an administrator, once per machine. Signing with a
+certificate the machines already trust (`Build.ps1 -ShortMenu -CertificateThumbprint ...`) removes
+that step entirely.
+
+None of this shows on a machine set to the classic context menu, where the short menu never renders.
 
 ## Command line
 

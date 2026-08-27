@@ -17,6 +17,15 @@
 .PARAMETER RuntimeIdentifier
 	Target platform. NativeAOT cannot cross-compile, so this has to match the machine building it.
 
+.PARAMETER ShortMenu
+	Also build the pieces for Windows 11's short context menu: the shell-extension DLL, and a signed
+	sparse MSIX package with the certificate to trust it. Without this the entry lands under "Show
+	more options" instead, which needs no package, no certificate and no administrator.
+
+.PARAMETER CertificateThumbprint
+	Sign the package with this certificate instead of the development one. A certificate the target
+	machines already trust removes the administrator step from their install.
+
 .EXAMPLE
 	.\Build.ps1
 #>
@@ -25,7 +34,9 @@
 param(
 	[string] $OutputDirectory = (Join-Path $PSScriptRoot 'deploy'),
 	[string] $Configuration = 'Release',
-	[string] $RuntimeIdentifier = 'win-x64'
+	[string] $RuntimeIdentifier = 'win-x64',
+	[switch] $ShortMenu,
+	[string] $CertificateThumbprint
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +59,18 @@ dotnet publish (Join-Path $PSScriptRoot 'HardSpace\HardSpace.csproj') `
 	-c $Configuration -r $RuntimeIdentifier -o $OutputDirectory --nologo
 if ($LASTEXITCODE -ne 0) { throw 'publish failed.' }
 
+if ($ShortMenu) {
+	Write-Host '==> Publishing the shell extension' -ForegroundColor Cyan
+	dotnet publish (Join-Path $PSScriptRoot 'HardSpace.ShellExtension\HardSpace.ShellExtension.csproj') `
+		-c $Configuration -r $RuntimeIdentifier -o $OutputDirectory --nologo
+	if ($LASTEXITCODE -ne 0) { throw 'publish failed: HardSpace.ShellExtension' }
+
+	$packageArguments = @{ OutputDirectory = $OutputDirectory }
+	if ($CertificateThumbprint) { $packageArguments.CertificateThumbprint = $CertificateThumbprint }
+	else { $packageArguments.CreateSelfSignedCertificate = $true }
+	& (Join-Path $PSScriptRoot 'Package\Build-Package.ps1') @packageArguments
+}
+
 # Symbols are for debugging here, not for shipping.
 Get-ChildItem -LiteralPath $OutputDirectory -Filter *.pdb | Remove-Item -Force
 
@@ -60,5 +83,8 @@ Get-ChildItem -LiteralPath $OutputDirectory | ForEach-Object {
 }
 
 Write-Host ''
-Write-Host 'On the far end:  .\Install.ps1        (current user, no elevation)'
-Write-Host '                 .\Install.ps1 -Machine   (every user, elevated prompt)'
+Write-Host 'On the far end:  .\Install.ps1              (current user, no elevation)'
+Write-Host '                 .\Install.ps1 -Machine     (every user, elevated prompt)'
+if ($ShortMenu) {
+	Write-Host '                 .\Install.ps1 -ShortMenu   (Windows 11 short menu, elevated prompt)'
+}
