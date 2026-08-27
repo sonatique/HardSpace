@@ -42,7 +42,14 @@ internal static partial class Win32
 	internal const int SW_HIDE = 0;
 	internal const int SW_SHOW = 5;
 	internal const uint SWP_NOMOVE = 0x0002;
+	internal const uint SWP_NOSIZE = 0x0001;
+	internal const uint SWP_FRAMECHANGED = 0x0020;
 
+	internal const int GWL_STYLE = -16;
+	internal static readonly IntPtr HWND_BOTTOM = new(1);
+
+	internal const int SM_CXEDGE = 45;
+	internal const int SM_CYEDGE = 46;
 	internal const int SM_CXVSCROLL = 2;
 	internal const int SM_CYHSCROLL = 3;
 	internal const uint SPI_GETWORKAREA = 0x0030;
@@ -192,6 +199,12 @@ internal static partial class Win32
 
 	[LibraryImport("user32.dll")]
 	internal static partial IntPtr SetFocus(IntPtr hWnd);
+
+	[LibraryImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+	internal static partial int GetWindowLong(IntPtr hWnd, int index);
+
+	[LibraryImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+	internal static partial int SetWindowLong(IntPtr hWnd, int index, int value);
 
 	[LibraryImport("user32.dll")]
 	[return: MarshalAs(UnmanagedType.Bool)]

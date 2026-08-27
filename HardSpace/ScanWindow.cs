@@ -121,14 +121,8 @@ internal static unsafe class ScanWindow
 		_monoFont = CreateFont("Consolas", 10);
 
 		_status = CreateChild("STATIC", _statusText, Win32.WS_VISIBLE | Win32.WS_CHILD, 0, IntPtr.Zero, _uiFont);
-		_output = CreateChild(
-			"EDIT",
-			root,
-			Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_VSCROLL | Win32.WS_HSCROLL | Win32.WS_TABSTOP
-				| Win32.ES_MULTILINE | Win32.ES_READONLY | Win32.ES_AUTOVSCROLL | Win32.ES_AUTOHSCROLL,
-			Win32.WS_EX_CLIENTEDGE,
-			IntPtr.Zero,
-			_monoFont);
+		_output = CreateOutput(root, Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP
+			| Win32.ES_MULTILINE | Win32.ES_READONLY | Win32.ES_AUTOVSCROLL | Win32.ES_AUTOHSCROLL);
 		_copyButton = CreateChild("BUTTON", "&Copy", Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP, 0, IdCopy, _uiFont);
 		_closeButton = CreateChild("BUTTON", "Cancel", Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP | Win32.BS_DEFPUSHBUTTON, 0, IdClose, _uiFont);
 
@@ -138,6 +132,16 @@ internal static unsafe class ScanWindow
 		Win32.UpdateWindow(_window);
 		Win32.SetFocus(_closeButton);
 	}
+
+	/// <summary>
+	/// The report's text box. Its scroll bars are deliberately not part of the base style: they are
+	/// drawn permanently once present, needed or not, and the window is sized to its content so that
+	/// they are not needed. The one case that can still overflow -- a report wider or taller than the
+	/// screen allows -- gets them by rebuilding this control, because an edit control fixes its
+	/// scroll bars at creation and will not take them from SetWindowLong afterwards.
+	/// </summary>
+	private static IntPtr CreateOutput(string text, uint style)
+		=> CreateChild("EDIT", text, style, Win32.WS_EX_CLIENTEDGE, IntPtr.Zero, _monoFont);
 
 	private static IntPtr CreateChild(string className, string text, uint style, uint exStyle, IntPtr id, IntPtr font)
 	{
@@ -210,9 +214,12 @@ internal static unsafe class ScanWindow
 		if (dc == IntPtr.Zero)
 			return;
 
+		// Measured with two trailing spaces: the edit control keeps a small inset of its own on each
+		// side, and a line ending flush against the border reads as clipped even when it is not.
+		string measuring = longest + "  ";
 		Win32.SIZE extent;
 		IntPtr previousFont = Win32.SelectObject(dc, _monoFont);
-		bool measured = Win32.GetTextExtentPoint32(dc, longest, longest.Length, out extent);
+		bool measured = Win32.GetTextExtentPoint32(dc, measuring, measuring.Length, out extent);
 		Win32.SelectObject(dc, previousFont);
 		Win32.ReleaseDC(_output, dc);
 
@@ -221,30 +228,70 @@ internal static unsafe class ScanWindow
 
 		int margin = Scale(10);
 		int gap = Scale(8);
+		int buttonWidth = Scale(92);
 		int buttonHeight = Scale(28);
-		int padding = Scale(8);   // the edit control's own inner border
+		int edgeWidth = 2 * Win32.GetSystemMetrics(Win32.SM_CXEDGE);    // the WS_EX_CLIENTEDGE border
+		int edgeHeight = 2 * Win32.GetSystemMetrics(Win32.SM_CYEDGE);
 
-		int clientWidth = (2 * margin) + extent.Width + padding + Win32.GetSystemMetrics(Win32.SM_CXVSCROLL);
-		int clientHeight = margin + (lines.Length * extent.Height) + padding
-			+ Win32.GetSystemMetrics(Win32.SM_CYHSCROLL) + gap + buttonHeight + margin;
+		// What the report needs, with no allowance for scroll bars: the point is not to have any.
+		int clientWidth = (2 * margin) + extent.Width + edgeWidth;
+		int clientHeight = margin + (lines.Length * extent.Height) + edgeHeight + gap + buttonHeight + margin;
+
+		// A very short report must still leave room for the two buttons.
+		clientWidth = Math.Max(clientWidth, (2 * margin) + (2 * buttonWidth) + gap);
 
 		// The client rectangle has to grow by the frame to become a window size.
 		if (!Win32.GetWindowRect(_window, out Win32.RECT window) || !Win32.GetClientRect(_window, out Win32.RECT client))
 			return;
 
-		int width = clientWidth + (window.Width - client.Width);
-		int height = clientHeight + (window.Height - client.Height);
+		int frameWidth = window.Width - client.Width;
+		int frameHeight = window.Height - client.Height;
+		int width = clientWidth + frameWidth;
+		int height = clientHeight + frameHeight;
 
-		// Never shrink below what is already shown, and never outgrow the work area.
-		width = Math.Max(width, window.Width);
-		height = Math.Max(height, window.Height);
+		// The window is sized to the report in both directions: the size it was created at only ever
+		// had to hold the progress line, and leaving it at that would pad the report with dead space.
 		if (Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, out Win32.RECT workArea, 0))
 		{
 			width = Math.Min(width, workArea.Width);
 			height = Math.Min(height, workArea.Height);
 		}
 
+		// Only a window clamped by the screen can still be too small for its report; give that one
+		// the scroll bars it needs, and nothing else any.
+		int textWidth = width - frameWidth - (2 * margin) - edgeWidth;
+		int textHeight = height - frameHeight - margin - edgeHeight - gap - buttonHeight - margin;
+		EnsureScrollBars(
+			vertical: lines.Length * extent.Height > textHeight,
+			horizontal: extent.Width > textWidth,
+			text);
+
 		Win32.SetWindowPos(_window, IntPtr.Zero, 0, 0, width, height, Win32.SWP_NOZORDER | Win32.SWP_NOMOVE);
+	}
+
+	/// <summary>
+	/// Gives the text box the scroll bars it needs, rebuilding it when that changes: an edit control
+	/// decides on its scroll bars when it is created and ignores a later style change.
+	/// </summary>
+	private static void EnsureScrollBars(bool vertical, bool horizontal, string text)
+	{
+		uint current = (uint)Win32.GetWindowLong(_output, Win32.GWL_STYLE);
+		uint wanted = current & ~(Win32.WS_VSCROLL | Win32.WS_HSCROLL);
+		if (vertical)
+			wanted |= Win32.WS_VSCROLL;
+		if (horizontal)
+			wanted |= Win32.WS_HSCROLL;
+
+		if (wanted == current)
+			return;
+
+		Win32.DestroyWindow(_output);
+		_output = CreateOutput(text, wanted);
+
+		// A freshly created child sits on top of the z-order, which is also the tab order; put it
+		// back behind the buttons so Tab still reaches Copy and Close in the order they are read.
+		Win32.SetWindowPos(_output, Win32.HWND_BOTTOM, 0, 0, 0, 0,
+			Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_FRAMECHANGED);
 	}
 
 	private static void Pump()
@@ -318,7 +365,12 @@ internal static unsafe class ScanWindow
 					Win32.EnableWindow(_copyButton, true);
 					Win32.SetWindowText(_closeButton, "Close");
 					Win32.SetFocus(_closeButton);
+
+					// Hiding the status line moves everything up, and FitToContent may find the
+					// window is already big enough and leave it alone -- in which case no WM_SIZE
+					// arrives and nothing else would ever re-lay out the controls.
 					FitToContent(Volatile.Read(ref _outputText));
+					Layout();
 					return IntPtr.Zero;
 
 				case Win32.WM_COMMAND:
