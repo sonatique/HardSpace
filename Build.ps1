@@ -21,11 +21,11 @@
 .PARAMETER RuntimeIdentifier
 	Target platform. NativeAOT cannot cross-compile, so this has to match the machine building it.
 
-.PARAMETER ShortMenu
-	Force the Windows 11 short-menu pieces in or out. Left alone, they go in when this machine can
-	build them: the Windows SDK for packing and signing, and a certificate to sign with. Passing
-	-ShortMenu also creates a development certificate if there is none, which is a change to the
-	certificate store and so is never done implicitly.
+.PARAMETER NoShortMenu
+	Leave the Windows 11 short-menu pieces out. They go in by default: what the executable carries is
+	what it can install, and a build meant for someone else's machine should carry everything any
+	machine might want. Packing and signing them needs the Windows SDK, and a certificate -- a
+	development one is created if there is none. Use this for a quick local build without either.
 
 .PARAMETER CertificateThumbprint
 	Sign the package with this certificate instead of the development one. A certificate the target
@@ -40,61 +40,27 @@ param(
 	[string] $OutputDirectory = (Join-Path $PSScriptRoot 'deploy'),
 	[string] $Configuration = 'Release',
 	[string] $RuntimeIdentifier = 'win-x64',
-	[switch] $ShortMenu,
+	[switch] $NoShortMenu,
 	[string] $CertificateThumbprint
 )
 
 $ErrorActionPreference = 'Stop'
 
-<#
-.SYNOPSIS
-	Whether the short-menu package can be built here, and if not, why not.
-.DESCRIPTION
-	Packing and signing an MSIX needs the Windows SDK and a certificate. Neither is needed to build
-	the tool itself, so a clone with neither still builds -- it just produces an executable that
-	cannot offer the short menu, and says so rather than leaving it to be discovered later.
-#>
-function Get-ShortMenuReadiness {
-	$sdk = @('makeappx.exe', 'signtool.exe') | Where-Object {
+# Everything that any machine might need goes in, because the machine this is built for is not the
+# machine it will run on: whoever gets this executable should not be short of a piece of it.
+$ShortMenu = -not $NoShortMenu
+
+if ($ShortMenu) {
+	# The one thing that cannot be arranged from here. Saying so beats shipping a lesser executable
+	# that looks identical and fails only when someone right-clicks a folder on Windows 11.
+	$missing = @('makeappx.exe', 'signtool.exe') | Where-Object {
 		-not (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\$_" -ErrorAction SilentlyContinue)
 	}
-	if ($sdk) {
-		return [pscustomobject]@{ Ready = $false; Reason = "the Windows SDK is not installed ($($sdk -join ', ') not found)" }
+	if ($missing) {
+		throw "The Windows SDK is needed to pack and sign the short-menu package, and $($missing -join ' and ') " +
+			'could not be found. Install the Windows SDK, or pass -NoShortMenu for a build without it -- ' +
+			'whose entry will sit under "Show more options" on a stock Windows 11.'
 	}
-
-	if ($CertificateThumbprint) {
-		if (-not (Test-Path "Cert:\CurrentUser\My\$CertificateThumbprint")) {
-			return [pscustomobject]@{ Ready = $false; Reason = "certificate $CertificateThumbprint is not in Cert:\CurrentUser\My" }
-		}
-
-		return [pscustomobject]@{ Ready = $true; Reason = 'signing with the certificate given' }
-	}
-
-	$development = Get-ChildItem Cert:\CurrentUser\My |
-		Where-Object { $_.Subject -eq 'CN=HardSpace Development' -and $_.NotAfter -gt (Get-Date) }
-	if (-not $development) {
-		return [pscustomobject]@{ Ready = $false; Reason = 'there is no signing certificate; -ShortMenu creates a development one' }
-	}
-
-	return [pscustomobject]@{ Ready = $true; Reason = 'signing with the development certificate' }
-}
-
-# Include the short menu when this machine can, unless told either way. What goes into the
-# executable decides what it can install, so it is said out loud rather than inferred from its size.
-$readiness = Get-ShortMenuReadiness
-$forced = $PSBoundParameters.ContainsKey('ShortMenu')
-if (-not $forced) { $ShortMenu = $readiness.Ready }
-
-Write-Host ''
-if ($ShortMenu) {
-	Write-Host "Windows 11 short menu: embedding it -- $($readiness.Reason)." -ForegroundColor Cyan
-}
-elseif ($forced) {
-	Write-Host 'Windows 11 short menu: left out, as asked.' -ForegroundColor Yellow
-}
-else {
-	Write-Host "Windows 11 short menu: left out -- $($readiness.Reason)." -ForegroundColor Yellow
-	Write-Host 'The entry will live under "Show more options" on a stock Windows 11.'
 }
 
 # The NativeAOT link step shells out to vswhere, which is not on PATH by default.
@@ -110,8 +76,8 @@ if (Test-Path $OutputDirectory) {
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
-# What the executable carries is what it can install, so its payload is emptied every time: a build
-# without -ShortMenu must not quietly ship the package left behind by the last build with it.
+# What the executable carries is what it can install, so its payload is emptied every time: a
+# -NoShortMenu build must not quietly ship the package left behind by an earlier one.
 $embedded = Join-Path $PSScriptRoot 'HardSpace\Embedded'
 New-Item -ItemType Directory -Force -Path $embedded | Out-Null
 Get-ChildItem -LiteralPath $embedded -File | Remove-Item -Force
@@ -123,9 +89,10 @@ if ($ShortMenu) {
 	if ($LASTEXITCODE -ne 0) { throw 'publish failed: HardSpace.ShellExtension' }
 	Get-ChildItem -LiteralPath $embedded -Filter *.pdb | Remove-Item -Force
 
+	# Reuses whatever development certificate is already there; only makes one when there is none.
 	$packageArguments = @{ OutputDirectory = $embedded }
 	if ($CertificateThumbprint) { $packageArguments.CertificateThumbprint = $CertificateThumbprint }
-	elseif ($forced) { $packageArguments.CreateSelfSignedCertificate = $true }
+	else { $packageArguments.CreateSelfSignedCertificate = $true }
 	& (Join-Path $PSScriptRoot 'Package\Build-Package.ps1') @packageArguments
 }
 
@@ -146,7 +113,7 @@ if ($ShortMenu) {
 	Write-Host 'It carries the shell extension and the signed package, so that is the whole deployment.'
 }
 else {
-	Write-Host 'One file, and the whole deployment.'
+	Write-Host 'One file -- but built with -NoShortMenu, so it cannot offer the Windows 11 short menu.'
 }
 
 Write-Host ''
