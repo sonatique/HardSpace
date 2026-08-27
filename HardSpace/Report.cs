@@ -34,6 +34,23 @@ internal static class Report
 
 	private static string Line(string label, string value) => label.PadRight(LabelWidth) + " : " + value;
 
+	/// <summary>
+	/// A size as a share of what Explorer reports, which is the figure every other one is being
+	/// compared against and so is 100% by construction. Small shares are not rounded away to zero:
+	/// "saved nothing" and "saved a little" are different answers.
+	/// </summary>
+	private static string Share(long value, long total)
+	{
+		if (total <= 0)
+			return string.Empty;
+
+		double percent = 100.0 * value / total;
+		if (percent > 0 && percent < 0.05)
+			return "  <0.1%";
+
+		return "  " + percent.ToString("0.#", CultureInfo.CurrentCulture) + "%";
+	}
+
 	public static string Build(ScanResult result)
 	{
 		StringBuilder text = new();
@@ -42,15 +59,15 @@ internal static class Report
 			text.AppendLine("*** Cancelled -- the figures below cover only what was scanned. ***");
 		text.AppendLine();
 
-		text.AppendLine(Line("Explorer size", Bytes(result.ApparentSize)));
-		text.AppendLine(Line("Actual content size", Bytes(result.UniqueSize)));
-		text.AppendLine(Line("Space used on disk", Bytes(result.AllocatedSize)));
+		text.AppendLine(Line("Explorer size", Bytes(result.ApparentSize) + Share(result.ApparentSize, result.ApparentSize)));
+		text.AppendLine(Line("Actual content size", Bytes(result.UniqueSize) + Share(result.UniqueSize, result.ApparentSize)));
+		text.AppendLine(Line("Space used on disk", Bytes(result.AllocatedSize) + Share(result.AllocatedSize, result.ApparentSize)));
 		text.AppendLine();
 
 		if (result.HardLinkedFileCount > 0)
 		{
 			text.AppendLine(Line("Hard links", $"{Count(result.HardLinkedFileCount)} names sharing {Count(result.HardLinkedUniqueCount)} files"));
-			text.AppendLine(Line("Saved by hard links", Bytes(result.HardLinkSavings)));
+			text.AppendLine(Line("Saved by hard links", Bytes(result.HardLinkSavings) + Share(result.HardLinkSavings, result.ApparentSize)));
 		}
 		else
 		{
