@@ -96,11 +96,12 @@ internal static unsafe class ScanWindow
 				throw new InvalidOperationException($"RegisterClassEx failed ({Marshal.GetLastWin32Error()}).");
 		}
 
-		// No caption: WS_POPUP drops the title bar, WS_THICKFRAME keeps the window resizable, and
-		// WS_EX_APPWINDOW keeps the taskbar button a popup would otherwise lose -- without it there
-		// would be no way back to the window once something covered it.
+		// No caption and no sizing border: WS_POPUP drops the title bar, and the window is sized to
+		// its report, so dragging an edge could only reveal blank space. WS_EX_APPWINDOW keeps the
+		// taskbar button a popup would otherwise lose -- without it there would be no way back to
+		// the window once something covered it.
 		_window = Win32.CreateWindowEx(
-			Win32.WS_EX_APPWINDOW, ClassName, "HardSpace -- " + root, Win32.WS_POPUP | Win32.WS_THICKFRAME,
+			Win32.WS_EX_APPWINDOW, ClassName, "HardSpace -- " + root, Win32.WS_POPUP | Win32.WS_BORDER,
 			unchecked((int)0x80000000), unchecked((int)0x80000000), DefaultWidth, DefaultHeight,
 			IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
 
@@ -191,6 +192,27 @@ internal static unsafe class ScanWindow
 	}
 
 	private static int Scale(int value) => value * _dpi / 96;
+
+	/// <summary>Recreates the fonts at the current DPI and hands them to the controls.</summary>
+	private static void RebuildFonts()
+	{
+		IntPtr oldUi = _uiFont;
+		IntPtr oldMono = _monoFont;
+
+		_uiFont = CreateFont("Segoe UI", 9);
+		_monoFont = CreateFont("Consolas", 10);
+
+		Win32.SendMessage(_status, Win32.WM_SETFONT, _uiFont, 1);
+		Win32.SendMessage(_output, Win32.WM_SETFONT, _monoFont, 1);
+		Win32.SendMessage(_copyButton, Win32.WM_SETFONT, _uiFont, 1);
+		Win32.SendMessage(_closeButton, Win32.WM_SETFONT, _uiFont, 1);
+
+		// Only once nothing is drawing with them any more.
+		if (oldUi != IntPtr.Zero)
+			Win32.DeleteObject(oldUi);
+		if (oldMono != IntPtr.Zero)
+			Win32.DeleteObject(oldMono);
+	}
 
 	/// <summary>
 	/// Grows the window so the whole report is visible without scrolling. The report is a handful of
@@ -329,6 +351,17 @@ internal static unsafe class ScanWindow
 					Layout();
 					return IntPtr.Zero;
 
+				// A window moved to a display at a different scale keeps its old fonts and its old
+				// idea of a pixel, which is how a report ends up adrift in a window sized for the
+				// other monitor. Rebuild both, then re-fit.
+				case Win32.WM_DPICHANGED:
+					_dpi = (int)wParam & 0xFFFF;
+					RebuildFonts();
+					if (_finished)
+						FitToContent(Volatile.Read(ref _outputText));
+					Layout();
+					return IntPtr.Zero;
+
 				// With no title bar to grab, the window's own background becomes the drag handle.
 				// Only the margins around the controls report HTCLIENT -- the text box and buttons
 				// are asked about their own hits -- so this costs nothing that was usable before,
@@ -361,7 +394,7 @@ internal static unsafe class ScanWindow
 						Win32.SetWindowText(_status, Volatile.Read(ref _statusText));
 					}
 
-					Win32.SetWindowText(_output, Volatile.Read(ref _outputText));
+					Win32.SetWindowText(_output, Volatile.Read(ref _outputText).TrimEnd('\r', '\n'));
 					Win32.EnableWindow(_copyButton, true);
 					Win32.SetWindowText(_closeButton, "Close");
 					Win32.SetFocus(_closeButton);

@@ -28,6 +28,12 @@ internal static class Report
 
 	public static string Count(long value) => value.ToString("N0", CultureInfo.CurrentCulture);
 
+	// One label column, as wide as the longest label and no wider: every character of it is window
+	// width the reader pays for.
+	private const int LabelWidth = 20;
+
+	private static string Line(string label, string value) => label.PadRight(LabelWidth) + " : " + value;
+
 	public static string Build(ScanResult result)
 	{
 		StringBuilder text = new();
@@ -36,29 +42,29 @@ internal static class Report
 			text.AppendLine("*** Cancelled -- the figures below cover only what was scanned. ***");
 		text.AppendLine();
 
-		text.AppendLine($"Size (as Explorer counts it) : {Bytes(result.ApparentSize)}");
-		text.AppendLine($"Actual content size          : {Bytes(result.UniqueSize)}");
-		text.AppendLine($"Space used on disk           : {Bytes(result.AllocatedSize)}");
+		text.AppendLine(Line("Explorer size", Bytes(result.ApparentSize)));
+		text.AppendLine(Line("Actual content size", Bytes(result.UniqueSize)));
+		text.AppendLine(Line("Space used on disk", Bytes(result.AllocatedSize)));
 		text.AppendLine();
 
 		if (result.HardLinkedFileCount > 0)
 		{
-			text.AppendLine($"Hard links                   : {Count(result.HardLinkedFileCount)} names sharing {Count(result.HardLinkedUniqueCount)} files");
-			text.AppendLine($"Saved by hard links          : {Bytes(result.HardLinkSavings)}");
+			text.AppendLine(Line("Hard links", $"{Count(result.HardLinkedFileCount)} names sharing {Count(result.HardLinkedUniqueCount)} files"));
+			text.AppendLine(Line("Saved by hard links", Bytes(result.HardLinkSavings)));
 		}
 		else
 		{
-			text.AppendLine("Hard links                   : none found");
+			text.AppendLine(Line("Hard links", "none found"));
 		}
 
 		text.AppendLine();
-		text.AppendLine($"Files                        : {Count(result.FileCount)}");
-		text.AppendLine($"Folders                      : {Count(result.DirectoryCount)}");
+		text.AppendLine(Line("Files", Count(result.FileCount)));
+		text.AppendLine(Line("Folders", Count(result.DirectoryCount)));
 		if (result.ReparsePointCount > 0)
-			text.AppendLine($"Symlinks / junctions         : {Count(result.ReparsePointCount)} (not followed, not counted)");
+			text.AppendLine(Line("Symlinks / junctions", $"{Count(result.ReparsePointCount)} (not followed, not counted)"));
 		if (result.UnreadableCount > 0)
-			text.AppendLine($"Unreadable entries           : {Count(result.UnreadableCount)} (counted as if unique)");
-		text.AppendLine($"Scan time                    : {result.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.CurrentCulture)} s");
+			text.AppendLine(Line("Unreadable entries", $"{Count(result.UnreadableCount)} (counted as if unique)"));
+		text.AppendLine(Line("Scan time", result.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.CurrentCulture) + " s"));
 
 		if (result.Errors.Count > 0)
 		{
