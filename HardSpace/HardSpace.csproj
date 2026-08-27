@@ -45,7 +45,7 @@
 	</ItemGroup>
 
 	<PropertyGroup>
-		<Company>Ellisys</Company>
+		<Company>sonatique</Company>
 		<Product>HardSpace</Product>
 		<AssemblyVersion>1.0</AssemblyVersion>
 		<Description>Folder size that counts hard-linked files only once.</Description>
