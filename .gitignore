@@ -1,7 +1,8 @@
 bin/
 obj/
 out/
-deploy/
+/deploy/
+/store/
 HardSpace/Embedded/
 .vs/
 *.user
