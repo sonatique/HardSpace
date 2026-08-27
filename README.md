@@ -108,13 +108,15 @@ One command, whatever the machine. It works out the best install available and s
 Elevated is the one to prefer: some machines ignore per-user verbs entirely, and only an elevated
 install can reach Windows 11's short menu. Neither needs a runtime installed.
 
-`--user` and `--machine` force the scope; `--no-short-menu` leaves the package out; `--quiet` skips
-the question about restarting Explorer; `--uninstall` undoes all of it. An install folder can be
+`--user` and `--machine` force the scope; `--no-short-menu` leaves the package out; `--quiet` and
+`--restart-explorer` decide the Explorer question up front; `--uninstall` undoes all of it. An install folder can be
 given as the argument: `--install "C:\Tools\HardSpace"`.
 
 Explorer reads context-menu entries when it starts, so the new one may not appear until it restarts.
-The installer explains that and asks -- at the console it was run from, or in a message box if there
-is none -- and says how to do it later if the answer is no.
+The installer explains that and asks, always in a message box: a Windows-subsystem program is not
+waited for by the shell, so the console it prints to belongs to the shell, which is reading the
+keyboard itself. Anything typed there is answered by the shell, not by this. `--restart-explorer`
+answers yes up front, `--quiet` neither asks nor restarts. Either way it says how to restart later.
 
 If the entry does not appear, or appears for a split second and then vanishes, the machine ignores
 per-user shell verbs. A machine forcing the Windows 11 classic context menu was observed doing

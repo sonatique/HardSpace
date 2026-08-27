@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -24,7 +24,8 @@ internal sealed class InstallOptions
 	public Scope Scope = Scope.Best;
 	public bool? ShortMenu;          // null: yes if this executable carries it and the prompt is elevated
 	public string? Directory;
-	public bool Quiet;
+	public bool Quiet;               // do not ask about Explorer, and do not restart it
+	public bool RestartExplorer;     // restart it without asking
 }
 
 /// <summary>
@@ -93,7 +94,7 @@ internal static class Installer
 		report.AppendLine(ShellIntegration.Register(machineWide, executable));
 		Ui.Tell(report.ToString().TrimEnd());
 
-		OfferExplorerRestart(options.Quiet);
+		OfferExplorerRestart(options);
 		return 0;
 	}
 
@@ -126,7 +127,7 @@ internal static class Installer
 		}
 
 		Ui.Tell(report.ToString().TrimEnd());
-		OfferExplorerRestart(options.Quiet);
+		OfferExplorerRestart(options);
 		return 0;
 	}
 
@@ -220,16 +221,25 @@ internal static class Installer
 		return process.ExitCode == 0 ? string.Empty : error.Trim();
 	}
 
-	private static void OfferExplorerRestart(bool quiet)
-	{
-		if (quiet)
-			return;
+	private const string HowToRestart =
+		"Explorer has not been restarted, and reads context-menu entries only when it starts, so "
+		+ "the entry may not appear yet. Any of these does it:\r\n"
+		+ "  - Task Manager (Ctrl+Shift+Esc), right-click \"Windows Explorer\", Restart\r\n"
+		+ "  - HardSpace.exe --install --restart-explorer\r\n"
+		+ "  - signing out and back in, or a reboot";
 
-		if (!Ui.Ask("Explorer only reads context-menu entries when it starts, so the entry may not appear "
+	private static void OfferExplorerRestart(InstallOptions options)
+	{
+		if (options.Quiet)
+		{
+			Ui.Tell(HowToRestart);
+			return;
+		}
+
+		if (!options.RestartExplorer && !Ui.Ask("Explorer only reads context-menu entries when it starts, so the entry may not appear "
 			+ "until it restarts. Restarting closes your open File Explorer windows.\r\n\r\nRestart Explorer now?"))
 		{
-			Ui.Tell("Left running. The entry appears after restarting Explorer from Task Manager, "
-				+ "signing out, or a reboot.");
+			Ui.Tell(HowToRestart);
 			return;
 		}
 
