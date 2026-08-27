@@ -100,9 +100,17 @@ internal static unsafe class ScanWindow
 		// its report, so dragging an edge could only reveal blank space. WS_EX_APPWINDOW keeps the
 		// taskbar button a popup would otherwise lose -- without it there would be no way back to
 		// the window once something covered it.
+		// Where the click was: Explorer has just closed a context menu under the cursor, so that is
+		// where the folder is on screen. Creating the window there rather than moving it afterwards
+		// also means it is born on the right monitor, and reports that monitor's DPI.
+		Win32.POINT cursor = default;
+		bool haveCursor = Win32.GetCursorPos(out cursor);
+
 		_window = Win32.CreateWindowEx(
 			Win32.WS_EX_APPWINDOW, ClassName, "HardSpace -- " + root, Win32.WS_POPUP | Win32.WS_BORDER,
-			unchecked((int)0x80000000), unchecked((int)0x80000000), DefaultWidth, DefaultHeight,
+			haveCursor ? cursor.X : unchecked((int)0x80000000),
+			haveCursor ? cursor.Y : unchecked((int)0x80000000),
+			DefaultWidth, DefaultHeight,
 			IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
 
 		if (_window == IntPtr.Zero)
@@ -128,6 +136,9 @@ internal static unsafe class ScanWindow
 		_closeButton = CreateChild("BUTTON", "Cancel", Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP | Win32.BS_DEFPUSHBUTTON, 0, IdClose, _uiFont);
 
 		Win32.EnableWindow(_copyButton, false);
+		if (haveCursor)
+			PlaceNear(cursor, Scale(DefaultWidth), Scale(DefaultHeight));
+
 		Layout();
 		Win32.ShowWindow(_window, Win32.SW_SHOW);
 		Win32.UpdateWindow(_window);
@@ -192,6 +203,44 @@ internal static unsafe class ScanWindow
 	}
 
 	private static int Scale(int value) => value * _dpi / 96;
+
+	/// <summary>
+	/// Puts the window just below and right of a point, pulled back inside the monitor's work area
+	/// when it would otherwise hang off an edge -- which is what happens for a folder near the
+	/// bottom or right of the screen, the common case for a long file list.
+	/// </summary>
+	private static void PlaceNear(Win32.POINT point, int width, int height)
+	{
+		int offset = Scale(12);
+		int x = point.X + offset;
+		int y = point.Y + offset;
+
+		if (TryGetWorkArea(Win32.MonitorFromPoint(point, Win32.MONITOR_DEFAULTTONEAREST), out Win32.RECT work))
+		{
+			x = Math.Min(x, work.Right - width);
+			y = Math.Min(y, work.Bottom - height);
+			x = Math.Max(x, work.Left);
+			y = Math.Max(y, work.Top);
+		}
+
+		Win32.SetWindowPos(_window, IntPtr.Zero, x, y, width, height, Win32.SWP_NOZORDER);
+	}
+
+	/// <summary>
+	/// The work area of one monitor. SystemParametersInfo(SPI_GETWORKAREA) answers for the primary
+	/// monitor only, which is the wrong answer on every other one.
+	/// </summary>
+	private static bool TryGetWorkArea(IntPtr monitor, out Win32.RECT work)
+	{
+		Win32.MONITORINFO info = new() { cbSize = (uint)Marshal.SizeOf<Win32.MONITORINFO>() };
+		if (monitor != IntPtr.Zero && Win32.GetMonitorInfo(monitor, ref info))
+		{
+			work = info.Work;
+			return true;
+		}
+
+		return Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, out work, 0);
+	}
 
 	/// <summary>Recreates the fonts at the current DPI and hands them to the controls.</summary>
 	private static void RebuildFonts()
@@ -278,7 +327,8 @@ internal static unsafe class ScanWindow
 
 		// The window is sized to the report in both directions: the size it was created at only ever
 		// had to hold the progress line, and leaving it at that would pad the report with dead space.
-		if (Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, out Win32.RECT workArea, 0))
+		bool haveWork = TryGetWorkArea(Win32.MonitorFromWindow(_window, Win32.MONITOR_DEFAULTTONEAREST), out Win32.RECT workArea);
+		if (haveWork)
 		{
 			width = Math.Min(width, workArea.Width);
 			height = Math.Min(height, workArea.Height);
@@ -293,7 +343,16 @@ internal static unsafe class ScanWindow
 			horizontal: extent.Width > textWidth,
 			text);
 
-		Win32.SetWindowPos(_window, IntPtr.Zero, 0, 0, width, height, Win32.SWP_NOZORDER | Win32.SWP_NOMOVE);
+		// Keep the top-left where the click put it, but not at the cost of hanging off the screen.
+		int left = window.Left;
+		int top = window.Top;
+		if (haveWork)
+		{
+			left = Math.Max(workArea.Left, Math.Min(left, workArea.Right - width));
+			top = Math.Max(workArea.Top, Math.Min(top, workArea.Bottom - height));
+		}
+
+		Win32.SetWindowPos(_window, IntPtr.Zero, left, top, width, height, Win32.SWP_NOZORDER);
 	}
 
 	/// <summary>

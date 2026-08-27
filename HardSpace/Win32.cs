@@ -55,6 +55,7 @@ internal static partial class Win32
 	internal const int SM_CXVSCROLL = 2;
 	internal const int SM_CYHSCROLL = 3;
 	internal const uint SPI_GETWORKAREA = 0x0030;
+	internal const uint MONITOR_DEFAULTTONEAREST = 2;
 	internal const uint SWP_NOZORDER = 0x0004;
 
 	internal const int COLOR_BTNFACE = 15;
@@ -92,6 +93,22 @@ internal static partial class Win32
 		public uint time;
 		public int ptX;
 		public int ptY;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	internal struct POINT
+	{
+		public int X;
+		public int Y;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	internal struct MONITORINFO
+	{
+		public uint cbSize;
+		public RECT Monitor;
+		public RECT Work;
+		public uint Flags;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -214,6 +231,20 @@ internal static partial class Win32
 
 	[LibraryImport("user32.dll")]
 	internal static partial uint GetDpiForWindow(IntPtr hWnd);
+
+	[LibraryImport("user32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool GetCursorPos(out POINT point);
+
+	[LibraryImport("user32.dll")]
+	internal static partial IntPtr MonitorFromPoint(POINT point, uint flags);
+
+	[LibraryImport("user32.dll")]
+	internal static partial IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+	[LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
 
 	[LibraryImport("user32.dll")]
 	internal static partial IntPtr GetSysColorBrush(int index);
