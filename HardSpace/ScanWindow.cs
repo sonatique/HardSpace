@@ -132,10 +132,15 @@ internal static unsafe class ScanWindow
 		_status = CreateChild("STATIC", _statusText, Win32.WS_VISIBLE | Win32.WS_CHILD, 0, IntPtr.Zero, _uiFont);
 		_output = CreateOutput(root, Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP
 			| Win32.ES_MULTILINE | Win32.ES_READONLY | Win32.ES_AUTOVSCROLL | Win32.ES_AUTOHSCROLL);
-		_copyButton = CreateChild("BUTTON", "&Copy", Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP, 0, IdCopy, _uiFont);
-		_closeButton = CreateChild("BUTTON", "Cancel", Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP | Win32.BS_DEFPUSHBUTTON, 0, IdClose, _uiFont);
+		// Owner-drawn so that they can be painted by the theme the window is actually using; see
+		// Theme.DrawButton for why the system will not do it.
+		_copyButton = CreateChild("BUTTON", "&Copy",
+			Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP | Win32.BS_OWNERDRAW, 0, IdCopy, _uiFont);
+		_closeButton = CreateChild("BUTTON", "Cancel",
+			Win32.WS_VISIBLE | Win32.WS_CHILD | Win32.WS_TABSTOP | Win32.BS_OWNERDRAW, 0, IdClose, _uiFont);
 
 		Win32.EnableWindow(_copyButton, false);
+		Theme.Apply(_window, _output, _copyButton, _closeButton, _status);
 		if (haveCursor)
 			PlaceNear(cursor, Scale(DefaultWidth), Scale(DefaultHeight));
 
@@ -413,6 +418,37 @@ internal static unsafe class ScanWindow
 			{
 				case Win32.WM_SIZE:
 					Layout();
+					return IntPtr.Zero;
+
+				case Win32.WM_DRAWITEM:
+					Theme.DrawButton(in *(Win32.DRAWITEMSTRUCT*)lParam);
+					return (IntPtr)1;
+
+				case Win32.WM_ERASEBKGND:
+					if (Win32.GetClientRect(hWnd, out Win32.RECT area))
+						Win32.FillRect(wParam, in area, Theme.BackgroundBrush);
+
+					return (IntPtr)1;
+
+				// What a control paints with is whatever its parent answers here. A read-only edit
+				// asks as a static, which is why both messages land in the same place.
+				case Win32.WM_CTLCOLOREDIT:
+				case Win32.WM_CTLCOLORSTATIC:
+				case Win32.WM_CTLCOLORBTN:
+				{
+					IntPtr brush = Theme.ControlColor(wParam, lParam == _output);
+					if (brush != IntPtr.Zero)
+						return brush;
+
+					break;
+				}
+
+				// Following the system means noticing when it changes, which it does under the
+				// reader while the window is open.
+				case Win32.WM_SETTINGCHANGE:
+					Theme.Apply(_window, _output, _copyButton, _closeButton, _status);
+					Win32.SetWindowPos(_window, IntPtr.Zero, 0, 0, 0, 0,
+						Win32.SWP_NOZORDER | Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_FRAMECHANGED);
 					return IntPtr.Zero;
 
 				// A window moved to a display at a different scale keeps its old fonts and its old
