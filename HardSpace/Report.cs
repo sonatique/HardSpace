@@ -61,10 +61,11 @@ internal static class Report
 			text.AppendLine("*** Cancelled -- the figures below cover only what was scanned. ***");
 		text.AppendLine();
 
+		// The measured truth first, then the two figures being compared against it.
 		long onDisk = result.AllocatedSize;
+		text.AppendLine(Line("Space used on disk", Bytes(onDisk) + Share(onDisk, onDisk)));
 		text.AppendLine(Line("Explorer size", Bytes(result.ApparentSize) + Share(result.ApparentSize, onDisk)));
 		text.AppendLine(Line("Actual content size", Bytes(result.UniqueSize) + Share(result.UniqueSize, onDisk)));
-		text.AppendLine(Line("Space used on disk", Bytes(onDisk) + Share(onDisk, onDisk)));
 		text.AppendLine();
 
 		if (result.HardLinkedFileCount > 0)
