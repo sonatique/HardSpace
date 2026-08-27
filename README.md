@@ -44,9 +44,20 @@ the MSVC linker).
 Publishes `deploy\HardSpace.exe`. That one file is the whole deployment: it scans folders, and it
 installs itself.
 
-Add `-ShortMenu` and the executable also *carries* the Windows 11 short-menu pieces -- the
-shell-extension DLL and a signed sparse MSIX package, embedded as resources, which `--install`
-writes out and registers. It grows from 2.0 MB to 4.8 MB. See below for what that buys and costs.
+Where it can, the build also embeds the Windows 11 short-menu pieces -- the shell-extension DLL and
+a signed sparse MSIX package, which `--install` writes out and registers. That takes the executable
+from 3.1 MB to 4.8 MB, and it needs two things a clone may not have: the Windows SDK, to pack and
+sign the package, and a certificate to sign it with. When either is missing the build says so and
+carries on without them:
+
+```
+Windows 11 short menu: left out -- there is no signing certificate; -ShortMenu creates a development one.
+The entry will live under "Show more options" on a stock Windows 11.
+```
+
+`-ShortMenu` insists, creating a development certificate if there is none -- which is a change to
+the certificate store, and so is never done implicitly. `-ShortMenu:$false` leaves them out.
+`-CertificateThumbprint` signs with a certificate of your own instead.
 
 ### Publish (NativeAOT)
 
@@ -113,7 +124,7 @@ Because it is a Windows-subsystem program, a shell does not wait for it. From a 
 
 ### Installing on someone else's machine
 
-Run `.\Build.ps1 -ShortMenu` and send them `deploy\HardSpace.exe`. One file, and it installs itself.
+Run `.\Build.ps1` and send them `deploy\HardSpace.exe`. One file, and it installs itself.
 
 If it arrives by mail or chat it carries a mark of the web, and SmartScreen stops it on first run --
 "Windows protected your PC", *More info*, *Run anyway*. Copying through a network share or a USB
@@ -139,7 +150,8 @@ is no third way.
 .\Build.ps1 -ShortMenu
 ```
 
-embeds the shell extension and the package in the executable, and on the target machine, from an
+embeds the shell extension and the package in the executable -- which the default build already
+does, where it can -- and on the target machine, from an
 elevated prompt, `--install` writes them out beside the installed executable, tells the machine to
 trust the package's certificate, and registers the package against that folder. It registers the classic verb as well, which is what
 covers drives -- the package manifest cannot, its schema accepting only `*`, `.<extension>`,
