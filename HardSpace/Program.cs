@@ -120,6 +120,7 @@ internal static partial class Program
 					Directory = path,
 					Quiet = quiet,
 					RestartExplorer = restartExplorer,
+					Arguments = args,
 				});
 
 			case "--uninstall":

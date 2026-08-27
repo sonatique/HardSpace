@@ -9,13 +9,23 @@ namespace HardSpace;
 /// so an instance started from Explorer or by double-clicking has no console at all. Every message
 /// goes to the console when there is one and to a message box when there is not.
 /// </summary>
+internal enum Answer
+{
+	Yes,
+	No,
+	Cancel,
+}
+
 internal static partial class Ui
 {
 	private const uint MB_OK = 0x00000000;
 	private const uint MB_YESNO = 0x00000004;
+	private const uint MB_YESNOCANCEL = 0x00000003;
 	private const uint MB_ICONINFORMATION = 0x00000040;
 	private const uint MB_ICONQUESTION = 0x00000020;
+	private const int IDCANCEL = 2;
 	private const int IDYES = 6;
+	private const int IDNO = 7;
 
 	private const uint AttachParentProcess = 0xFFFFFFFF;
 	private const int StdOutputHandle = -11;
@@ -45,6 +55,15 @@ internal static partial class Ui
 	/// </remarks>
 	public static bool Ask(string question)
 		=> Win32.MessageBox(IntPtr.Zero, question, "HardSpace", MB_YESNO | MB_ICONQUESTION) == IDYES;
+
+	/// <summary>A question with a way out, for choices that should not be made by default.</summary>
+	public static Answer AskWithCancel(string question)
+		=> Win32.MessageBox(IntPtr.Zero, question, "HardSpace", MB_YESNOCANCEL | MB_ICONQUESTION) switch
+		{
+			IDYES => Answer.Yes,
+			IDNO => Answer.No,
+			_ => Answer.Cancel,   // IDCANCEL, Escape, or no desktop to ask on
+		};
 
 	private static bool HasConsole()
 	{

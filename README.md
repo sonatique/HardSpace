@@ -106,7 +106,24 @@ One command, whatever the machine. It works out the best install available and s
 | administrator | `%ProgramFiles%\HardSpace`, entry for every user, and the Windows 11 short menu |
 
 Elevated is the one to prefer: some machines ignore per-user verbs entirely, and only an elevated
-install can reach Windows 11's short menu. Neither needs a runtime installed.
+install can reach Windows 11's short menu. So an ordinary prompt does not just quietly settle for
+less -- it says what the difference is and offers to restart itself elevated:
+
+```
+Putting HardSpace in Windows 11's default right-click menu -- the one that opens first -- needs an
+elevated prompt, and installs it for every user of this machine.
+
+Without that it installs for you alone, and its entry lives in the "Show more options" menu.
+
+Yes     restart elevated, and install into the default menu
+No      carry on without it
+Cancel  install nothing
+```
+
+Answering yes raises the UAC prompt and runs the same command again with the same arguments; if
+elevation is refused, it carries on with the lesser install and says so. `--user`, `--machine`,
+`--no-short-menu` and `--quiet` each answer the question in advance, so a scripted install is never
+stopped by it. Neither install needs a runtime.
 
 `--user` and `--machine` force the scope; `--no-short-menu` leaves the package out; `--quiet` and
 `--restart-explorer` decide the Explorer question up front; `--uninstall` undoes all of it. An install folder can be

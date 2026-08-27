@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -26,6 +27,7 @@ internal sealed class InstallOptions
 	public string? Directory;
 	public bool Quiet;               // do not ask about Explorer, and do not restart it
 	public bool RestartExplorer;     // restart it without asking
+	public string[] Arguments = [];  // what this process was given, to hand to an elevated retry
 }
 
 /// <summary>
@@ -57,6 +59,34 @@ internal static class Installer
 			Scope.CurrentUser => false,
 			_ => elevated,
 		};
+
+		// A plain --install from an ordinary prompt can do better than it is about to, and only the
+		// reader can decide whether that is worth a UAC prompt. Ask rather than quietly settling.
+		if (!elevated && carriesPackage && options.ShortMenu is null && options.Scope == Scope.Best && !options.Quiet)
+		{
+			switch (Ui.AskWithCancel(
+				"Putting HardSpace in Windows 11\u0027s default right-click menu -- the one that opens "
+				+ "first -- needs an elevated prompt, and installs it for every user of this machine."
+				+ "\r\n\r\nWithout that it installs for you alone, and its entry lives in the "
+				+ "\"Show more options\" menu (Shift+F10, or Shift+right-click)."
+				+ "\r\n\r\nYes\trestart elevated, and install into the default menu"
+				+ "\r\nNo\tcarry on without it"
+				+ "\r\nCancel\tinstall nothing"))
+			{
+				case Answer.Yes:
+					int code = RelaunchElevated(options);
+					if (code >= 0)
+						return code;
+
+					Ui.Tell("Elevation was declined, so HardSpace is installing for you alone; its entry "
+						+ "will be under \"Show more options\".");
+					break;
+
+				case Answer.Cancel:
+					Ui.Tell("Nothing was installed.");
+					return 1;
+			}
+		}
 
 		if (machineWide && !elevated)
 		{
@@ -129,6 +159,36 @@ internal static class Installer
 		Ui.Tell(report.ToString().TrimEnd());
 		OfferExplorerRestart(options);
 		return 0;
+	}
+
+	/// <summary>
+	/// Runs this same command again, elevated, and waits for it. Returns its exit code, or -1 when
+	/// the elevation prompt was refused -- which is an answer, not a failure, and leaves the caller
+	/// free to carry on with the lesser install.
+	/// </summary>
+	private static int RelaunchElevated(InstallOptions options)
+	{
+		ProcessStartInfo start = new(Environment.ProcessPath ?? ExecutableName)
+		{
+			UseShellExecute = true,   // required for the runas verb, which is what raises the UAC prompt
+			Verb = "runas",
+		};
+		foreach (string argument in options.Arguments)
+			start.ArgumentList.Add(argument);
+
+		try
+		{
+			using Process? elevated = Process.Start(start);
+			if (elevated is null)
+				return -1;
+
+			elevated.WaitForExit();
+			return elevated.ExitCode;
+		}
+		catch (Win32Exception)
+		{
+			return -1;
+		}
 	}
 
 	/// <summary>
