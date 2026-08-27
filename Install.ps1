@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 	Installs HardSpace and its Explorer context-menu entry.
 
@@ -18,6 +18,14 @@
 
 .PARAMETER Machine
 	Register for every user of the machine (HKLM) rather than the current one. Needs elevation.
+
+.PARAMETER ShortMenu
+	Also install the MSIX package that puts the entry in Windows 11's *short* context menu -- the one
+	that appears before "Show more options". Only an IExplorerCommand from a package can go there, so
+	this needs HardSpace.ShellExtension.dll, HardSpace.msix and HardSpace.cer beside this script;
+	build them with Build.ps1 -ShortMenu. Implies -Machine, and needs an elevated prompt to tell the
+	machine to trust the package's certificate. Pointless on a machine set to the classic context
+	menu, where the short menu never renders at all.
 
 .PARAMETER Source
 	The HardSpace.exe to install. Defaults to the one next to this script, then to the repository's
@@ -51,6 +59,7 @@
 param(
 	[string] $InstallDirectory,
 	[switch] $Machine,
+	[switch] $ShortMenu,
 	[string] $Source,
 	[switch] $RestartExplorer,
 	[switch] $KeepExplorer,
@@ -58,6 +67,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The package's payload is loaded into every user's Explorer, so it belongs in a machine-wide folder.
+if ($ShortMenu) { $Machine = $true }
 
 function Test-Elevated {
 	$identity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -73,6 +85,41 @@ function Resolve-Source {
 	}
 
 	throw 'HardSpace.exe not found. Put it next to this script, or pass -Source.'
+}
+
+<#
+.SYNOPSIS
+	Installs the sparse MSIX package that carries the Windows 11 short-menu command.
+.DESCRIPTION
+	The package declares a COM server and a context-menu extension; its payload -- the executable and
+	the shell-extension DLL -- stays in the install folder, which is what -ExternalLocation names.
+	Windows will not install a package it does not trust, and a development certificate is trusted
+	nowhere until a machine is told to, which is the one part of this needing an administrator.
+#>
+function Install-ShortMenu([string] $directory) {
+	$dll = Join-Path $PSScriptRoot 'HardSpace.ShellExtension.dll'
+	$msix = Join-Path $PSScriptRoot 'HardSpace.msix'
+	$certificate = Join-Path $PSScriptRoot 'HardSpace.cer'
+	foreach ($required in $dll, $msix, $certificate) {
+		if (-not (Test-Path $required)) {
+			throw "$(Split-Path -Leaf $required) is missing. Build the short-menu pieces with " +
+				'Build.ps1 -ShortMenu, and copy the whole deploy folder over.'
+		}
+	}
+
+	Copy-Item -LiteralPath $dll -Destination $directory -Force
+
+	$thumbprint = (New-Object Security.Cryptography.X509Certificates.X509Certificate2 $certificate).Thumbprint
+	if (-not (Test-Path "Cert:\LocalMachine\TrustedPeople\$thumbprint")) {
+		Write-Host '==> Trusting the package certificate (machine-wide, once)' -ForegroundColor Cyan
+		Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+	}
+
+	Write-Host '==> Registering the package' -ForegroundColor Cyan
+	Get-AppxPackage *HardSpace* | Remove-AppxPackage -ErrorAction SilentlyContinue
+	Add-AppxPackage -Path $msix -ExternalLocation $directory
+
+	Write-Host 'The entry is in the short menu too, on a machine that shows one.'
 }
 
 if (-not $InstallDirectory) {
@@ -92,6 +139,13 @@ if (($Machine -or -not $perUserPath) -and -not (Test-Elevated)) {
 }
 
 if ($Uninstall) {
+	if (Get-AppxPackage *HardSpace*) {
+		Write-Host '==> Removing the package' -ForegroundColor Cyan
+		Get-AppxPackage *HardSpace* | Remove-AppxPackage
+	}
+
+	Remove-Item -LiteralPath (Join-Path $InstallDirectory 'HardSpace.ShellExtension.dll') -Force -ErrorAction SilentlyContinue
+
 	if (Test-Path $installedExe) {
 		Write-Host "==> Removing the context-menu entry" -ForegroundColor Cyan
 		$arguments = @('--unregister'); if ($Machine) { $arguments += '--machine' }
@@ -131,6 +185,8 @@ else {
 	$hive = if ($Machine) { 'HKLM:' } else { 'HKCU:' }
 	$registered = Test-Path "$hive\Software\Classes\Directory\shell\HardSpace\command"
 	if (-not $registered) { throw 'Registration did not take; nothing was written to the registry.' }
+
+	if ($ShortMenu) { Install-ShortMenu $InstallDirectory }
 
 	Write-Host ''
 	Write-Host "Installed: $installedExe" -ForegroundColor Green
