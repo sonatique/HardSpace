@@ -255,9 +255,14 @@ internal static unsafe class ScanWindow
 		int edgeWidth = 2 * Win32.GetSystemMetrics(Win32.SM_CXEDGE);    // the WS_EX_CLIENTEDGE border
 		int edgeHeight = 2 * Win32.GetSystemMetrics(Win32.SM_CYEDGE);
 
+		// The text box gets the same breathing room under its last line as there is between the box
+		// and the buttons, so the report does not end flush against the border.
+		int bottomPadding = gap;
+
 		// What the report needs, with no allowance for scroll bars: the point is not to have any.
 		int clientWidth = (2 * margin) + extent.Width + edgeWidth;
-		int clientHeight = margin + (lines.Length * extent.Height) + edgeHeight + gap + buttonHeight + margin;
+		int clientHeight = margin + (lines.Length * extent.Height) + bottomPadding + edgeHeight
+			+ gap + buttonHeight + margin;
 
 		// A very short report must still leave room for the two buttons.
 		clientWidth = Math.Max(clientWidth, (2 * margin) + (2 * buttonWidth) + gap);
@@ -282,7 +287,7 @@ internal static unsafe class ScanWindow
 		// Only a window clamped by the screen can still be too small for its report; give that one
 		// the scroll bars it needs, and nothing else any.
 		int textWidth = width - frameWidth - (2 * margin) - edgeWidth;
-		int textHeight = height - frameHeight - margin - edgeHeight - gap - buttonHeight - margin;
+		int textHeight = height - frameHeight - margin - edgeHeight - bottomPadding - gap - buttonHeight - margin;
 		EnsureScrollBars(
 			vertical: lines.Length * extent.Height > textHeight,
 			horizontal: extent.Width > textWidth,
