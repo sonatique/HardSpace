@@ -7,7 +7,7 @@ MSBuild hard-linked the same assembly into twenty output folders is reported twe
 HardSpace reports both numbers side by side:
 
 ```
-C:\li6\Projects\Sniffers\Sniffer#7\Projects
+C:\src\SomeSolution
 
 Size (as Explorer counts it) : 21.9 GB (23'513'177'998 bytes)
 Actual content size          : 21.63 GB (23'226'728'150 bytes)
