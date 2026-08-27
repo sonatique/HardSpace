@@ -103,7 +103,7 @@ One command, whatever the machine. It works out the best install available and s
 | Run as | What you get |
 | --- | --- |
 | yourself | `%LOCALAPPDATA%\Programs\HardSpace`, entry for you only |
-| administrator | `%ProgramFiles%\HardSpace`, entry for every user -- and the Windows 11 short menu, if the executable was built with `-ShortMenu` |
+| administrator | `%ProgramFiles%\HardSpace`, entry for every user, and the Windows 11 short menu |
 
 Elevated is the one to prefer: some machines ignore per-user verbs entirely, and only an elevated
 install can reach Windows 11's short menu. Neither needs a runtime installed.
