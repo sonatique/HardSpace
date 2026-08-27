@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 	Builds HardSpace and gathers what a colleague needs into one folder.
 
@@ -83,8 +83,7 @@ Get-ChildItem -LiteralPath $OutputDirectory | ForEach-Object {
 }
 
 Write-Host ''
-Write-Host 'On the far end:  .\Install.ps1              (current user, no elevation)'
-Write-Host '                 .\Install.ps1 -Machine     (every user, elevated prompt)'
-if ($ShortMenu) {
-	Write-Host '                 .\Install.ps1 -ShortMenu   (Windows 11 short menu, elevated prompt)'
-}
+Write-Host 'On the far end, one command either way:  .\Install.ps1'
+Write-Host 'It installs the most that machine and that prompt allow, and says what it chose.'
+$elevatedGives = if ($ShortMenu) { 'every user, and the Windows 11 short menu.' } else { 'every user.' }
+Write-Host "From an elevated prompt that means $elevatedGives"

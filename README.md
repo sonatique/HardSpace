@@ -85,9 +85,19 @@ trimming.
 .\Install.ps1
 ```
 
-That copies `HardSpace.exe` into `%LOCALAPPDATA%\Programs\HardSpace` and registers the context-menu
-entry for the current user. No administrator rights, no runtime to install: the executable is
-self-contained and is the only file involved.
+One command, whatever the machine. It works out the best install available and says what it chose:
+
+| Run as | What you get |
+| --- | --- |
+| yourself | `%LOCALAPPDATA%\Programs\HardSpace`, entry for you only |
+| administrator | `%ProgramFiles%\HardSpace`, entry for every user -- and the Windows 11 short-menu package too, if the folder was built with `-ShortMenu` |
+
+Elevated is the one to prefer: some machines ignore per-user verbs entirely, and only an elevated
+install can reach Windows 11's short menu. Neither needs a runtime installed -- the executable is
+self-contained.
+
+`-Machine:$false` and `-ShortMenu:$false` override the decision; `-Machine` and `-ShortMenu` demand
+it and fail loudly if the prompt is not elevated.
 
 Explorer reads context-menu entries when it starts, so the new one may not appear until it
 restarts. The script explains that and asks; answering no prints the ways to do it later. `-RestartExplorer`
