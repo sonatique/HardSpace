@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 	Builds HardSpace into the single file that is its whole deployment.
 
@@ -22,14 +22,17 @@
 	Target platform. NativeAOT cannot cross-compile, so this has to match the machine building it.
 
 .PARAMETER ShortMenu
-	Also build and embed the Windows 11 short-menu pieces.
+	Force the Windows 11 short-menu pieces in or out. Left alone, they go in when this machine can
+	build them: the Windows SDK for packing and signing, and a certificate to sign with. Passing
+	-ShortMenu also creates a development certificate if there is none, which is a change to the
+	certificate store and so is never done implicitly.
 
 .PARAMETER CertificateThumbprint
 	Sign the package with this certificate instead of the development one. A certificate the target
 	machines already trust removes the administrator step from their install.
 
 .EXAMPLE
-	.\Build.ps1 -ShortMenu
+	.\Build.ps1
 #>
 
 [CmdletBinding()]
@@ -42,6 +45,57 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+<#
+.SYNOPSIS
+	Whether the short-menu package can be built here, and if not, why not.
+.DESCRIPTION
+	Packing and signing an MSIX needs the Windows SDK and a certificate. Neither is needed to build
+	the tool itself, so a clone with neither still builds -- it just produces an executable that
+	cannot offer the short menu, and says so rather than leaving it to be discovered later.
+#>
+function Get-ShortMenuReadiness {
+	$sdk = @('makeappx.exe', 'signtool.exe') | Where-Object {
+		-not (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\$_" -ErrorAction SilentlyContinue)
+	}
+	if ($sdk) {
+		return [pscustomobject]@{ Ready = $false; Reason = "the Windows SDK is not installed ($($sdk -join ', ') not found)" }
+	}
+
+	if ($CertificateThumbprint) {
+		if (-not (Test-Path "Cert:\CurrentUser\My\$CertificateThumbprint")) {
+			return [pscustomobject]@{ Ready = $false; Reason = "certificate $CertificateThumbprint is not in Cert:\CurrentUser\My" }
+		}
+
+		return [pscustomobject]@{ Ready = $true; Reason = 'signing with the certificate given' }
+	}
+
+	$development = Get-ChildItem Cert:\CurrentUser\My |
+		Where-Object { $_.Subject -eq 'CN=HardSpace Development' -and $_.NotAfter -gt (Get-Date) }
+	if (-not $development) {
+		return [pscustomobject]@{ Ready = $false; Reason = 'there is no signing certificate; -ShortMenu creates a development one' }
+	}
+
+	return [pscustomobject]@{ Ready = $true; Reason = 'signing with the development certificate' }
+}
+
+# Include the short menu when this machine can, unless told either way. What goes into the
+# executable decides what it can install, so it is said out loud rather than inferred from its size.
+$readiness = Get-ShortMenuReadiness
+$forced = $PSBoundParameters.ContainsKey('ShortMenu')
+if (-not $forced) { $ShortMenu = $readiness.Ready }
+
+Write-Host ''
+if ($ShortMenu) {
+	Write-Host "Windows 11 short menu: embedding it -- $($readiness.Reason)." -ForegroundColor Cyan
+}
+elseif ($forced) {
+	Write-Host 'Windows 11 short menu: left out, as asked.' -ForegroundColor Yellow
+}
+else {
+	Write-Host "Windows 11 short menu: left out -- $($readiness.Reason)." -ForegroundColor Yellow
+	Write-Host 'The entry will live under "Show more options" on a stock Windows 11.'
+}
 
 # The NativeAOT link step shells out to vswhere, which is not on PATH by default.
 $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
@@ -71,7 +125,7 @@ if ($ShortMenu) {
 
 	$packageArguments = @{ OutputDirectory = $embedded }
 	if ($CertificateThumbprint) { $packageArguments.CertificateThumbprint = $CertificateThumbprint }
-	else { $packageArguments.CreateSelfSignedCertificate = $true }
+	elseif ($forced) { $packageArguments.CreateSelfSignedCertificate = $true }
 	& (Join-Path $PSScriptRoot 'Package\Build-Package.ps1') @packageArguments
 }
 
@@ -92,7 +146,7 @@ if ($ShortMenu) {
 	Write-Host 'It carries the shell extension and the signed package, so that is the whole deployment.'
 }
 else {
-	Write-Host 'One file, and the whole deployment. Add -ShortMenu for the Windows 11 short menu.'
+	Write-Host 'One file, and the whole deployment.'
 }
 
 Write-Host ''
