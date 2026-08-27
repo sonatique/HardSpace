@@ -20,7 +20,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<Company>Ellisys</Company>
+		<Company>sonatique</Company>
 		<Product>HardSpace</Product>
 		<AssemblyVersion>1.0</AssemblyVersion>
 		<Description>Windows 11 context-menu command for HardSpace.</Description>
