@@ -23,9 +23,13 @@
 	The HardSpace.exe to install. Defaults to the one next to this script, then to the repository's
 	build output.
 
+.PARAMETER RestartExplorer
+	Restart Explorer without asking. Explorer reads the list of context-menu entries when it starts,
+	so a new entry usually does not appear until it does. Without this the script asks; with
+	-KeepExplorer it neither asks nor restarts.
+
 .PARAMETER KeepExplorer
-	Do not restart Explorer. The verb list is read when Explorer starts, so a new entry usually does
-	not appear until it is restarted.
+	Never restart Explorer and do not ask. For unattended installs.
 
 .PARAMETER Uninstall
 	Remove the entry and delete the installed executable.
@@ -48,6 +52,7 @@ param(
 	[string] $InstallDirectory,
 	[switch] $Machine,
 	[string] $Source,
+	[switch] $RestartExplorer,
 	[switch] $KeepExplorer,
 	[switch] $Uninstall
 )
@@ -137,8 +142,50 @@ else {
 	}
 }
 
-if (-not $KeepExplorer) {
+<#
+.SYNOPSIS
+	Restarts Explorer, asking first, because it closes the user's open windows.
+.DESCRIPTION
+	Explorer reads context-menu entries when it starts, so a newly registered one usually does not
+	appear until it restarts. That is not a reason to close somebody's File Explorer windows out
+	from under them without asking, so this explains the trade and takes an answer -- and when there
+	is nobody to ask, it says what to do rather than acting.
+#>
+function Complete-Installation {
+	if ($KeepExplorer) { return }
+
+	$question = 'Explorer only reads context-menu entries when it starts, so the new entry may not' +
+		[Environment]::NewLine + 'appear until it is restarted. Restarting closes your open File Explorer windows.'
+
+	if (-not $RestartExplorer) {
+		Write-Host ''
+		Write-Host $question
+		Write-Host ''
+
+		$answer = $null
+		try {
+			if ([Environment]::UserInteractive) {
+				$answer = Read-Host 'Restart Explorer now? [y/N]'
+			}
+		}
+		catch {
+			# No console to ask on: an unattended run, so leave Explorer alone.
+			$answer = $null
+		}
+
+		if ($answer -notmatch '^(y|yes|o|oui)$') {
+			Write-Host ''
+			Write-Host 'Left running. The entry will appear after any of these:' -ForegroundColor Yellow
+			Write-Host '  - Task Manager (Ctrl+Shift+Esc), right-click "Windows Explorer", Restart'
+			Write-Host '  - Stop-Process -Name explorer -Force        (Explorer restarts itself)'
+			Write-Host '  - signing out and back in, or a reboot'
+			return
+		}
+	}
+
 	Write-Host ''
-	Write-Host '==> Restarting Explorer so it picks up the change' -ForegroundColor Cyan
+	Write-Host '==> Restarting Explorer' -ForegroundColor Cyan
 	Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
 }
+
+Complete-Installation
