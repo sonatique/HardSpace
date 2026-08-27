@@ -7,9 +7,18 @@
 	verb for folders, folder backgrounds and drives. The executable is self-contained: there is no
 	runtime to install and nothing else to copy.
 
-	Per-user by default, which needs no administrator rights. Some machines ignore per-user shell
-	verbs entirely -- Explorer draws the entry and then drops it a frame later, so it visibly
-	flashes -- and there -Machine is required, which writes to HKLM and needs an elevated prompt.
+	It works out what to do from what it is given. Run from an elevated prompt it installs for every
+	user, which is the reliable choice: some machines ignore per-user verbs entirely, drawing the
+	entry and dropping it a frame later so that it visibly flashes. Run without elevation it installs
+	for the current user, which needs no rights and is right on most machines.
+
+	If the short-menu files are present beside it -- and they only are if the deploy folder was built
+	with Build.ps1 -ShortMenu -- an elevated run also installs the package that puts the entry in
+	Windows 11's short menu, the one that opens before "Show more options". Nothing else can put it
+	there. On a machine set to the classic context menu the package is simply never shown, and the
+	classic verb, which this always registers, is what serves.
+
+	So: run it elevated if you can, and it covers every case. Run it as yourself and it covers most.
 
 .PARAMETER InstallDirectory
 	Where the executable goes. Defaults to a folder under the user's profile, or to Program Files
@@ -17,15 +26,20 @@
 	the entry; re-run this script instead.
 
 .PARAMETER Machine
-	Register for every user of the machine (HKLM) rather than the current one. Needs elevation.
+	Register for every user of the machine (HKLM) rather than the current one. Needs elevation. On by
+	default when the prompt is already elevated; -Machine:$false forces per-user.
 
 .PARAMETER ShortMenu
 	Also install the MSIX package that puts the entry in Windows 11's *short* context menu -- the one
 	that appears before "Show more options". Only an IExplorerCommand from a package can go there, so
 	this needs HardSpace.ShellExtension.dll, HardSpace.msix and HardSpace.cer beside this script;
 	build them with Build.ps1 -ShortMenu. Implies -Machine, and needs an elevated prompt to tell the
-	machine to trust the package's certificate. Pointless on a machine set to the classic context
-	menu, where the short menu never renders at all.
+	machine to trust the package's certificate. On by default when those files are there and the
+	prompt is elevated; -ShortMenu:$false leaves the package out. Pointless on a machine set to the
+	classic context menu, where the short menu never renders at all.
+
+.PARAMETER Quiet
+	Skip the summary of what was decided.
 
 .PARAMETER Source
 	The HardSpace.exe to install. Defaults to the one next to this script, then to the repository's
@@ -60,6 +74,7 @@ param(
 	[string] $InstallDirectory,
 	[switch] $Machine,
 	[switch] $ShortMenu,
+	[switch] $Quiet,
 	[string] $Source,
 	[switch] $RestartExplorer,
 	[switch] $KeepExplorer,
@@ -68,8 +83,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Work out the best install this machine and this prompt allow, unless told otherwise. The point is
+# that whoever runs this should not have to know which of three answers applies to their Explorer.
+$elevated = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).
+	IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$packageFiles = @('HardSpace.ShellExtension.dll', 'HardSpace.msix', 'HardSpace.cer') |
+	ForEach-Object { Join-Path $PSScriptRoot $_ }
+$packageAvailable = -not ($packageFiles | Where-Object { -not (Test-Path $_) })
+
+if (-not $PSBoundParameters.ContainsKey('ShortMenu')) { $ShortMenu = $elevated -and $packageAvailable -and -not $Uninstall }
+if (-not $PSBoundParameters.ContainsKey('Machine')) { $Machine = $elevated }
+
 # The package's payload is loaded into every user's Explorer, so it belongs in a machine-wide folder.
 if ($ShortMenu) { $Machine = $true }
+
+if (-not $Quiet -and -not $Uninstall) {
+	Write-Host ''
+	Write-Host ('Elevated prompt      : {0}' -f $(if ($elevated) { 'yes' } else { 'no -- installing for you only' }))
+	Write-Host ('Scope                : {0}' -f $(if ($Machine) { 'every user (HKLM)' } else { 'current user (HKCU)' }))
+	Write-Host ('Windows 11 short menu: {0}' -f $(
+		if ($ShortMenu) { 'yes, installing the package' }
+		elseif (-not $packageAvailable) { 'no -- built without -ShortMenu, entry goes under "Show more options"' }
+		else { 'no -- needs an elevated prompt' }))
+}
 
 function Test-Elevated {
 	$identity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -194,7 +230,11 @@ else {
 	if (-not $Machine) {
 		Write-Host ''
 		Write-Host 'If the entry does not appear, or appears and vanishes again, this machine ignores'
-		Write-Host 'per-user verbs. Re-run from an elevated prompt with -Machine.'
+		Write-Host 'per-user verbs: re-run this from an elevated prompt and it will install for every'
+		Write-Host 'user instead, which such machines do honour.'
+	}
+	elseif (-not $ShortMenu -and $packageAvailable) {
+		Write-Host 'It is under "Show more options" on a stock Windows 11 menu; -ShortMenu lifts it out.'
 	}
 }
 
