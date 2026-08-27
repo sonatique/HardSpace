@@ -26,6 +26,7 @@ internal static partial class Win32
 	internal const uint ES_AUTOVSCROLL = 0x0040;
 	internal const uint ES_AUTOHSCROLL = 0x0080;
 	internal const uint BS_DEFPUSHBUTTON = 0x0001;
+	internal const uint BS_OWNERDRAW = 0x000B;
 
 	internal const uint WM_DESTROY = 0x0002;
 	internal const uint WM_SIZE = 0x0005;
@@ -33,6 +34,12 @@ internal static partial class Win32
 	internal const uint WM_SETFONT = 0x0030;
 	internal const uint WM_COMMAND = 0x0111;
 	internal const uint WM_KEYDOWN = 0x0100;
+	internal const uint WM_DRAWITEM = 0x002B;
+	internal const uint WM_ERASEBKGND = 0x0014;
+	internal const uint WM_SETTINGCHANGE = 0x001A;
+	internal const uint WM_CTLCOLOREDIT = 0x0133;
+	internal const uint WM_CTLCOLORSTATIC = 0x0138;
+	internal const uint WM_CTLCOLORBTN = 0x0135;
 	internal const uint WM_NCHITTEST = 0x0084;
 	internal const uint WM_DPICHANGED = 0x02E0;
 	internal const uint WM_APP = 0x8000;
@@ -59,6 +66,33 @@ internal static partial class Win32
 	internal const uint SWP_NOZORDER = 0x0004;
 
 	internal const int COLOR_BTNFACE = 15;
+
+	// Dwm window attributes: 20 asks for the dark non-client area, 33 for Windows 11's rounded
+	// corners, 34 sets the border colour.
+	internal const uint DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+	internal const uint DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+	internal const uint DWMWA_BORDER_COLOR = 34;
+	internal const int DWMWCP_ROUND = 2;
+
+	internal const int TRANSPARENT = 1;
+
+	// Owner-draw state, and the theme part and states for a push button.
+	internal const uint ODS_SELECTED = 0x0001;
+	internal const uint ODS_DISABLED = 0x0004;
+	internal const uint ODS_FOCUS = 0x0010;
+	internal const uint ODS_HOTLIGHT = 0x0040;
+
+	internal const int BP_PUSHBUTTON = 1;
+	internal const int PBS_NORMAL = 1;
+	internal const int PBS_HOT = 2;
+	internal const int PBS_PRESSED = 3;
+	internal const int PBS_DISABLED = 4;
+	internal const int PBS_DEFAULTED = 5;
+	internal const int TMT_TEXTCOLOR = 3803;
+
+	internal const uint DT_CENTER = 0x00000001;
+	internal const uint DT_VCENTER = 0x00000004;
+	internal const uint DT_SINGLELINE = 0x00000020;
 
 	internal const uint CF_UNICODETEXT = 13;
 	internal const uint GMEM_MOVEABLE = 0x0002;
@@ -109,6 +143,20 @@ internal static partial class Win32
 		public RECT Monitor;
 		public RECT Work;
 		public uint Flags;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	internal struct DRAWITEMSTRUCT
+	{
+		public uint CtlType;
+		public uint CtlID;
+		public uint ItemID;
+		public uint ItemAction;
+		public uint ItemState;
+		public IntPtr Item;
+		public IntPtr DeviceContext;
+		public RECT ItemRect;
+		public IntPtr ItemData;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -250,6 +298,9 @@ internal static partial class Win32
 	internal static partial IntPtr GetSysColorBrush(int index);
 
 	[LibraryImport("user32.dll")]
+	internal static partial int GetSysColor(int index);
+
+	[LibraryImport("user32.dll")]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	internal static partial bool OpenClipboard(IntPtr hWndNewOwner);
 
@@ -277,12 +328,67 @@ internal static partial class Win32
 	[LibraryImport("gdi32.dll")]
 	internal static partial IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
 
+	[LibraryImport("gdi32.dll")]
+	internal static partial IntPtr CreateSolidBrush(uint color);
+
+	[LibraryImport("gdi32.dll")]
+	internal static partial IntPtr CreatePen(int style, int width, uint color);
+
+	[LibraryImport("gdi32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool RoundRect(IntPtr hDC, int left, int top, int right, int bottom, int cornerWidth, int cornerHeight);
+
+	[LibraryImport("gdi32.dll")]
+	internal static partial uint SetTextColor(IntPtr hDC, uint color);
+
+	[LibraryImport("gdi32.dll")]
+	internal static partial uint SetBkColor(IntPtr hDC, uint color);
+
+	[LibraryImport("gdi32.dll")]
+	internal static partial int SetBkMode(IntPtr hDC, int mode);
+
+	[LibraryImport("user32.dll")]
+	internal static partial int FillRect(IntPtr hDC, in RECT rect, IntPtr brush);
+
+	[LibraryImport("dwmapi.dll")]
+	internal static partial int DwmSetWindowAttribute(IntPtr hWnd, uint attribute, in int value, uint size);
+
+	[LibraryImport("uxtheme.dll", EntryPoint = "SetWindowTheme", StringMarshalling = StringMarshalling.Utf16)]
+	internal static partial int SetWindowTheme(IntPtr hWnd, string? subAppName, string? subIdList);
+
+	[LibraryImport("uxtheme.dll", EntryPoint = "OpenThemeData", StringMarshalling = StringMarshalling.Utf16)]
+	internal static partial IntPtr OpenThemeData(IntPtr hWnd, string classList);
+
+	[LibraryImport("uxtheme.dll")]
+	internal static partial int CloseThemeData(IntPtr theme);
+
+	[LibraryImport("uxtheme.dll")]
+	internal static partial int DrawThemeBackground(IntPtr theme, IntPtr hDC, int part, int state, in RECT rect, IntPtr clip);
+
+	[LibraryImport("uxtheme.dll")]
+	internal static partial int GetThemeColor(IntPtr theme, int part, int state, int property, out uint color);
+
+	[LibraryImport("user32.dll", EntryPoint = "DrawTextW", StringMarshalling = StringMarshalling.Utf16)]
+	internal static partial int DrawText(IntPtr hDC, string text, int length, ref RECT rect, uint format);
+
+	[LibraryImport("user32.dll", EntryPoint = "GetWindowTextW", StringMarshalling = StringMarshalling.Utf16)]
+	internal static partial int GetWindowText(IntPtr hWnd, [Out] char[] text, int maxCount);
+
 	[LibraryImport("gdi32.dll", EntryPoint = "GetTextExtentPoint32W", StringMarshalling = StringMarshalling.Utf16)]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	internal static partial bool GetTextExtentPoint32(IntPtr hDC, string text, int length, out SIZE size);
 
 	[LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
 	internal static partial IntPtr GetModuleHandle(string? lpModuleName);
+
+	[LibraryImport("kernel32.dll", EntryPoint = "LoadLibraryW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+	internal static partial IntPtr LoadLibrary(string lpLibFileName);
+
+	// The ordinal overload: the dark-mode helpers in uxtheme have no exported names.
+	[LibraryImport("kernel32.dll", EntryPoint = "GetProcAddress", SetLastError = true)]
+	internal static partial IntPtr GetProcAddress(IntPtr hModule, IntPtr lpProcName);
+
+	internal static IntPtr GetProcAddress(IntPtr module, int ordinal) => GetProcAddress(module, (IntPtr)ordinal);
 
 	[LibraryImport("kernel32.dll", SetLastError = true)]
 	internal static partial IntPtr GlobalAlloc(uint flags, nuint bytes);

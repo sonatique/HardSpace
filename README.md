@@ -92,6 +92,13 @@ The window is written directly against user32 rather than WinForms. That is what
 at all: `PublishTrimmed` on a WinForms project fails with NETSDK1175, and NativeAOT implies
 trimming.
 
+Being raw user32 means none of the Windows 11 dressing comes for free, so it is done by hand: the
+system's light or dark colours (followed live, through `WM_SETTINGCHANGE`), rounded corners and a
+matching border via DWM attributes, and the text box coloured through `WM_CTLCOLOR*`. The buttons
+are owner-drawn -- a push button paints itself and ignores both its parent's colours and
+`SetWindowTheme`, so in light mode it is drawn through the theme renderer, and in dark mode by hand,
+the dark button class the shell uses for its own not being one `OpenThemeData` will hand out.
+
 ## Install
 
 ```
