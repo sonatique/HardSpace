@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 	Packs and signs the sparse MSIX that puts HardSpace in the Windows 11 short context menu.
 
@@ -10,11 +10,12 @@
 	The package is *sparse*: it carries this manifest and its logos, nothing else. The binaries stay
 	in an ordinary folder, named when the package is installed, which is Install.ps1's job.
 
-	This script only produces HardSpace.msix and the certificate needed to trust it. It installs
-	nothing and touches no machine state beyond the certificate store.
+	This script only produces HardSpace.msix. The certificate that signed it travels inside the
+	package, so there is nothing to ship alongside; Install.ps1 reads it back out. Nothing is
+	installed here and no machine state is touched beyond the certificate store.
 
 .PARAMETER OutputDirectory
-	Where HardSpace.msix and HardSpace.cer are written.
+	Where HardSpace.msix is written.
 
 .PARAMETER CertificateThumbprint
 	An existing code-signing certificate in Cert:\CurrentUser\My. With one the target machines
@@ -78,7 +79,6 @@ $certificate = Resolve-Certificate
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 $OutputDirectory = (Resolve-Path $OutputDirectory).Path
 $msixPath = Join-Path $OutputDirectory 'HardSpace.msix'
-$certificatePath = Join-Path $OutputDirectory 'HardSpace.cer'
 
 Write-Host '==> Staging the manifest' -ForegroundColor Cyan
 if (Test-Path $stagingDirectory) { Remove-Item -Recurse -Force $stagingDirectory }
@@ -105,9 +105,6 @@ if ($LASTEXITCODE -ne 0) {
 	throw 'signtool failed.'
 }
 
-Export-Certificate -Cert $certificate -FilePath $certificatePath | Out-Null
-
 Write-Host ''
-Write-Host "Package     : $msixPath" -ForegroundColor Green
-Write-Host "Certificate : $certificatePath" -ForegroundColor Green
-Write-Host "Publisher   : $($certificate.Subject)"
+Write-Host "Package   : $msixPath" -ForegroundColor Green
+Write-Host "Publisher : $($certificate.Subject)"

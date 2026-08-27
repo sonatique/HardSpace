@@ -32,7 +32,7 @@
 .PARAMETER ShortMenu
 	Also install the MSIX package that puts the entry in Windows 11's *short* context menu -- the one
 	that appears before "Show more options". Only an IExplorerCommand from a package can go there, so
-	this needs HardSpace.ShellExtension.dll, HardSpace.msix and HardSpace.cer beside this script;
+	this needs HardSpace.ShellExtension.dll and HardSpace.msix beside this script;
 	build them with Build.ps1 -ShortMenu. Implies -Machine, and needs an elevated prompt to tell the
 	machine to trust the package's certificate. On by default when those files are there and the
 	prompt is elevated; -ShortMenu:$false leaves the package out. Pointless on a machine set to the
@@ -87,7 +87,7 @@ $ErrorActionPreference = 'Stop'
 # that whoever runs this should not have to know which of three answers applies to their Explorer.
 $elevated = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).
 	IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-$packageFiles = @('HardSpace.ShellExtension.dll', 'HardSpace.msix', 'HardSpace.cer') |
+$packageFiles = @('HardSpace.ShellExtension.dll', 'HardSpace.msix') |
 	ForEach-Object { Join-Path $PSScriptRoot $_ }
 $packageAvailable = -not ($packageFiles | Where-Object { -not (Test-Path $_) })
 
@@ -135,8 +135,7 @@ function Resolve-Source {
 function Install-ShortMenu([string] $directory) {
 	$dll = Join-Path $PSScriptRoot 'HardSpace.ShellExtension.dll'
 	$msix = Join-Path $PSScriptRoot 'HardSpace.msix'
-	$certificate = Join-Path $PSScriptRoot 'HardSpace.cer'
-	foreach ($required in $dll, $msix, $certificate) {
+	foreach ($required in $dll, $msix) {
 		if (-not (Test-Path $required)) {
 			throw "$(Split-Path -Leaf $required) is missing. Build the short-menu pieces with " +
 				'Build.ps1 -ShortMenu, and copy the whole deploy folder over.'
@@ -145,10 +144,17 @@ function Install-ShortMenu([string] $directory) {
 
 	Copy-Item -LiteralPath $dll -Destination $directory -Force
 
-	$thumbprint = (New-Object Security.Cryptography.X509Certificates.X509Certificate2 $certificate).Thumbprint
-	if (-not (Test-Path "Cert:\LocalMachine\TrustedPeople\$thumbprint")) {
-		Write-Host '==> Trusting the package certificate (machine-wide, once)' -ForegroundColor Cyan
-		Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+	# The certificate that signed the package is inside it -- a signature carries its own signer --
+	# so there is no .cer to ship, lose, or accidentally pair with the wrong package.
+	$signer = (Get-AuthenticodeSignature $msix).SignerCertificate
+	if (-not $signer) { throw 'HardSpace.msix carries no signature; rebuild it with Build.ps1 -ShortMenu.' }
+
+	if (-not (Test-Path "Cert:\LocalMachine\TrustedPeople\$($signer.Thumbprint)")) {
+		Write-Host "==> Trusting the package signer, $($signer.Subject) (machine-wide, once)" -ForegroundColor Cyan
+		$exported = Join-Path ([IO.Path]::GetTempPath()) 'HardSpace-signer.cer'
+		[IO.File]::WriteAllBytes($exported, $signer.RawData)
+		try { Import-Certificate -FilePath $exported -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null }
+		finally { Remove-Item -LiteralPath $exported -Force -ErrorAction SilentlyContinue }
 	}
 
 	Write-Host '==> Registering the package' -ForegroundColor Cyan
