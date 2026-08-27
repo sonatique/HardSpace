@@ -9,19 +9,19 @@ HardSpace reports both numbers side by side:
 ```
 C:\src\SomeSolution
 
-Size (as Explorer counts it) : 21.9 GB (23'513'177'998 bytes)
-Actual content size          : 21.63 GB (23'226'728'150 bytes)
-Space used on disk           : 21.68 GB (23'280'696'200 bytes)
+Explorer size        : 21.9 GB (23'513'177'998 bytes)
+Actual content size  : 21.63 GB (23'226'728'150 bytes)
+Space used on disk   : 21.68 GB (23'280'696'200 bytes)
 
-Hard links                   : 252 names sharing 126 files
-Saved by hard links          : 273.18 MB (286'449'848 bytes)
+Hard links           : 252 names sharing 126 files
+Saved by hard links  : 273.18 MB (286'449'848 bytes)
 
-Files                        : 34'196
-Folders                      : 3'477
-Scan time                    : 0.7 s
+Files                : 34'196
+Folders              : 3'477
+Scan time            : 0.7 s
 ```
 
-- **Size (as Explorer counts it)** — every directory entry counted in full, so it matches Explorer.
+- **Explorer size** — every directory entry counted in full, so it matches Explorer.
 - **Actual content size** — each distinct file counted once, no matter how many names point at it.
 - **Space used on disk** — the clusters those distinct files actually occupy (so NTFS compression
   and sparse files show up here).
