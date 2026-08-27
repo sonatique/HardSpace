@@ -35,9 +35,11 @@ internal static class Report
 	private static string Line(string label, string value) => label.PadRight(LabelWidth) + " : " + value;
 
 	/// <summary>
-	/// A size as a share of what Explorer reports, which is the figure every other one is being
-	/// compared against and so is 100% by construction. Small shares are not rounded away to zero:
-	/// "saved nothing" and "saved a little" are different answers.
+	/// A size as a share of the space actually taken on disk, which is the one figure here that is
+	/// ground truth: it is what the volume gives up, and so it is what every other number is an
+	/// error against. Explorer's own reading therefore lands above 100%, by exactly the amount it
+	/// overstates. Small shares are not rounded away to zero: "saved nothing" and "saved a little"
+	/// are different answers.
 	/// </summary>
 	private static string Share(long value, long total)
 	{
@@ -59,15 +61,16 @@ internal static class Report
 			text.AppendLine("*** Cancelled -- the figures below cover only what was scanned. ***");
 		text.AppendLine();
 
-		text.AppendLine(Line("Explorer size", Bytes(result.ApparentSize) + Share(result.ApparentSize, result.ApparentSize)));
-		text.AppendLine(Line("Actual content size", Bytes(result.UniqueSize) + Share(result.UniqueSize, result.ApparentSize)));
-		text.AppendLine(Line("Space used on disk", Bytes(result.AllocatedSize) + Share(result.AllocatedSize, result.ApparentSize)));
+		long onDisk = result.AllocatedSize;
+		text.AppendLine(Line("Explorer size", Bytes(result.ApparentSize) + Share(result.ApparentSize, onDisk)));
+		text.AppendLine(Line("Actual content size", Bytes(result.UniqueSize) + Share(result.UniqueSize, onDisk)));
+		text.AppendLine(Line("Space used on disk", Bytes(onDisk) + Share(onDisk, onDisk)));
 		text.AppendLine();
 
 		if (result.HardLinkedFileCount > 0)
 		{
 			text.AppendLine(Line("Hard links", $"{Count(result.HardLinkedFileCount)} names sharing {Count(result.HardLinkedUniqueCount)} files"));
-			text.AppendLine(Line("Saved by hard links", Bytes(result.HardLinkSavings) + Share(result.HardLinkSavings, result.ApparentSize)));
+			text.AppendLine(Line("Saved by hard links", Bytes(result.HardLinkSavings) + Share(result.HardLinkSavings, result.AllocatedSize)));
 		}
 		else
 		{

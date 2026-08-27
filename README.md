@@ -9,12 +9,12 @@ HardSpace reports both numbers side by side:
 ```
 C:\src\SomeSolution
 
-Explorer size        : 21.88 GB (23'493'212'847 bytes)  100%
-Actual content size  : 20.99 GB (22'539'986'803 bytes)  95.9%
-Space used on disk   : 21.04 GB (22'593'299'392 bytes)  96.2%
+Explorer size        : 21.88 GB (23'493'212'847 bytes)  104%
+Actual content size  : 20.99 GB (22'539'986'803 bytes)  99.8%
+Space used on disk   : 21.04 GB (22'593'299'392 bytes)  100%
 
 Hard links           : 650 names sharing 151 files
-Saved by hard links  : 909.07 MB (953'226'044 bytes)  4.1%
+Saved by hard links  : 909.07 MB (953'226'044 bytes)  4.2%
 
 Files                : 34'196
 Folders              : 3'477
@@ -26,9 +26,13 @@ Scan time            : 0.7 s
 - **Space used on disk** — the clusters those distinct files actually occupy (so NTFS compression
   and sparse files show up here).
 
-The percentages are shares of what Explorer reports, which is why that line is always 100%. Space on
-disk can exceed it: a file occupies whole clusters, so a tree of small files takes more room than
-the sum of their sizes.
+The percentages are shares of the space actually used, which is why that line is always 100%: it is
+the one figure here that is ground truth, so everything else is an error measured against it. The
+Explorer line above 100% is exactly the amount Explorer overstates by -- 104% means it is claiming
+4% more than the volume gives up.
+
+A tree with no hard links still does not come out at exactly 100%, because a file occupies whole
+clusters: the sizes add up to slightly less than the room they take.
 
 ## Build
 
