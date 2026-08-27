@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 	Regenerates HardSpace\Properties\App.ico from MakeIcon.cs.
 
@@ -16,11 +16,18 @@
 
 [CmdletBinding()]
 param(
-	[string] $OutputPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'HardSpace\Properties\App.ico'),
+	[string] $OutputPath,
 	[int[]] $Sizes = @(16, 20, 24, 32, 48, 64, 128, 256)
 )
 
 $ErrorActionPreference = 'Stop'
 
-Add-Type -Path (Join-Path $PSScriptRoot 'MakeIcon.cs') -ReferencedAssemblies System.Drawing
+# $PSScriptRoot is not populated while parameter defaults are being bound under `powershell -File`,
+# so the script's own folder is worked out here, in the body, and the defaults are filled in after.
+$root = $PSScriptRoot
+if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+
+if (-not $OutputPath) { $OutputPath = Join-Path (Split-Path -Parent $root) 'HardSpace\Properties\App.ico' }
+
+Add-Type -Path (Join-Path $root 'MakeIcon.cs') -ReferencedAssemblies System.Drawing
 Write-Host ([MakeIcon]::Build($OutputPath, $Sizes))
