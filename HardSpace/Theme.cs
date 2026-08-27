@@ -24,6 +24,7 @@ internal static unsafe class Theme
 
 	// Explorer's light surface is white, not the old dialog grey that COLOR_BTNFACE still returns.
 	private const uint LightBackground = 0x00FFFFFF;
+	private const uint LightText = 0x00000000;
 
 	private static IntPtr _backgroundBrush;
 	private static IntPtr _controlBrush;
@@ -59,7 +60,7 @@ internal static unsafe class Theme
 		IntPtr oldBackground = _backgroundBrush;
 		IntPtr oldControl = _controlBrush;
 		_backgroundBrush = Win32.CreateSolidBrush(IsDark ? DarkBackground : LightBackground);
-		_controlBrush = Win32.CreateSolidBrush(IsDark ? DarkControl : 0x00FFFFFF);
+		_controlBrush = Win32.CreateSolidBrush(IsDark ? DarkControl : LightBackground);
 
 		int dark = IsDark ? 1 : 0;
 		Win32.DwmSetWindowAttribute(window, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, in dark, sizeof(int));
@@ -95,13 +96,15 @@ internal static unsafe class Theme
 	/// returns the brush for its background. A read-only edit asks with WM_CTLCOLORSTATIC rather
 	/// than WM_CTLCOLOREDIT, so both arrive here.
 	/// </summary>
+	/// <remarks>
+	/// Answered in both themes, not just the dark one. Left to itself a read-only edit paints its
+	/// background with the button face -- the old dialog grey -- however white the window around it
+	/// is, and the only way to say otherwise is to hand back a brush from here.
+	/// </remarks>
 	public static IntPtr ControlColor(IntPtr deviceContext, bool isTextBox)
 	{
-		if (!IsDark)
-			return IntPtr.Zero;   // light: let the system paint as it always did
-
-		Win32.SetTextColor(deviceContext, DarkText);
-		Win32.SetBkColor(deviceContext, isTextBox ? DarkControl : DarkBackground);
+		Win32.SetTextColor(deviceContext, IsDark ? DarkText : LightText);
+		Win32.SetBkColor(deviceContext, IsDark ? (isTextBox ? DarkControl : DarkBackground) : LightBackground);
 		return isTextBox ? _controlBrush : _backgroundBrush;
 	}
 
