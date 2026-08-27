@@ -41,12 +41,11 @@ the MSVC linker).
 .\Build.ps1
 ```
 
-Publishes and leaves `deploy\` holding the two files that are the whole deployment: `HardSpace.exe`
-and `Install.ps1`. Copy that folder to the machine that needs it and run the script there.
+Publishes and leaves two equivalent things: `deploy\`, to install straight from a build, and
+`HardSpace.zip`, which is the same folder as one file to send someone.
 
 Add `-ShortMenu` to also build the pieces for Windows 11's short menu -- the shell-extension DLL and
-a signed sparse package -- which makes it five files instead of two. See below for what that buys
-and what it costs.
+a signed sparse package. See below for what that buys and what it costs.
 
 ### Publish (NativeAOT)
 
@@ -124,7 +123,7 @@ To remove, with `-Machine` if that is how it went in:
 
 ### Installing on someone else's machine
 
-Run `.\Build.ps1` and send them `deploy\`, which holds exactly those two files and nothing else. If the executable arrives
+Run `.\Build.ps1` and send them `HardSpace.zip`. They unzip it anywhere and run `Install.ps1`. If the executable arrives
 by mail or chat it carries a mark of the web and SmartScreen stops it on first run; the script
 clears that with `Unblock-File`, but they will still see the prompt if they run the executable
 before the script. Copying through a network share or a USB stick avoids the mark entirely.
@@ -149,8 +148,8 @@ is no third way.
 .\Build.ps1 -ShortMenu
 ```
 
-adds `HardSpace.ShellExtension.dll`, `HardSpace.msix` and `HardSpace.cer` to `deploy\`, and on the
-target machine, from an elevated prompt:
+adds `HardSpace.ShellExtension.dll` and `HardSpace.msix` to the handover, and on the target
+machine, from an elevated prompt:
 
 ```
 .\Install.ps1 -ShortMenu
@@ -161,8 +160,10 @@ registers the package against that folder. It registers the classic verb as well
 covers drives -- the package manifest cannot, its schema accepting only `*`, `.<extension>`,
 `Directory` and `Directory\Background`.
 
-The certificate step is the price of a self-signed package: it is trusted nowhere until a machine is
-told to trust it, and telling it needs an administrator, once per machine. Signing with a
+There is no certificate file to ship: a signature carries its own signer, so the installer reads the
+certificate out of the package. The trust step itself is the price of a self-signed package -- it is
+trusted nowhere until a machine is told to, and telling it needs an administrator, once per
+machine. Signing with a
 certificate the machines already trust (`Build.ps1 -ShortMenu -CertificateThumbprint ...`) removes
 that step entirely.
 

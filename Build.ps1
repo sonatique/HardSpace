@@ -18,8 +18,8 @@
 	Target platform. NativeAOT cannot cross-compile, so this has to match the machine building it.
 
 .PARAMETER ShortMenu
-	Also build the pieces for Windows 11's short context menu: the shell-extension DLL, and a signed
-	sparse MSIX package with the certificate to trust it. Without this the entry lands under "Show
+	Also build the pieces for Windows 11's short context menu: the shell-extension DLL and a signed
+	sparse MSIX package. Without this the entry lands under "Show
 	more options" instead, which needs no package, no certificate and no administrator.
 
 .PARAMETER CertificateThumbprint
@@ -76,8 +76,15 @@ Get-ChildItem -LiteralPath $OutputDirectory -Filter *.pdb | Remove-Item -Force
 
 Copy-Item (Join-Path $PSScriptRoot 'Install.ps1') -Destination $OutputDirectory -Force
 
+# One file to hand over. The folder stays as well, for installing straight from a build.
+$archive = Join-Path (Split-Path -Parent $OutputDirectory) 'HardSpace.zip'
+if (Test-Path $archive) { Remove-Item -LiteralPath $archive -Force }
+Compress-Archive -Path (Join-Path $OutputDirectory '*') -DestinationPath $archive
+
 Write-Host ''
-Write-Host "Ready to hand over: $OutputDirectory" -ForegroundColor Green
+$archiveSize = '{0:N0}' -f (Get-Item $archive).Length
+Write-Host "Ready to hand over: $archive  ($archiveSize bytes)" -ForegroundColor Green
+Write-Host "                    unzipped alongside it in $OutputDirectory, holding"
 Get-ChildItem -LiteralPath $OutputDirectory | ForEach-Object {
 	"  {0,-16} {1,10:N0} bytes" -f $_.Name, $_.Length | Write-Host
 }
